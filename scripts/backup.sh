@@ -15,7 +15,9 @@ mkdir -p "${BACKUP_DIR}/www"
 
 echo "Backing up FreeRADIUS configuration..."
 # Copy all FreeRADIUS configuration files
-sudo cp -r /etc/freeradius/3.0/* "${BACKUP_DIR}/config/"
+# Using . to copy contents including hidden files if any, but * is usually fine.
+# The previous error "cannot stat" might be due to shell expansion in sudo.
+sudo cp -r /etc/freeradius/3.0/. "${BACKUP_DIR}/config/"
 
 echo "Backing up Mangospot Web App..."
 # Copy web application files
@@ -31,9 +33,12 @@ mysqldump -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" > "${BACKUP_DIR}/db/${DB_N
 
 echo "Compressing backup..."
 # Create a tarball of the backup directory
-tar -czf "${BACKUP_DIR}.tar.gz" "${BACKUP_DIR}"
+# Use sudo to ensure we can read all files (some config files might have restrictive permissions)
+sudo tar -czf "${BACKUP_DIR}.tar.gz" "${BACKUP_DIR}"
 
 # Cleanup
-rm -rf "${BACKUP_DIR}"
+sudo rm -rf "${BACKUP_DIR}"
 
 echo "Backup completed: ${BACKUP_DIR}.tar.gz"
+# Change ownership to current user so they can copy it
+sudo chown $USER:$USER "${BACKUP_DIR}.tar.gz"
