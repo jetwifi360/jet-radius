@@ -1,0 +1,6 @@
+# Ignore actual backup files (they are large and sensitive)
+*.tar.gz
+
+# Ignore system files
+.DS_Store
+Thumbs.db
