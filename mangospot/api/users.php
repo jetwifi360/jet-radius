@@ -610,7 +610,7 @@ if(isset($_POST['qty'])){
         // Generate Serial Number
         $serial_number = $batch_name . '-' . str_pad($o+1, strlen($qty), '0', STR_PAD_LEFT);
 
-        $batch_user = $prefix.random_str($lng, $crt);
+        $batch_user = $prf.random_str($lng, $crt);
         $batch_pswd = ($p_size > 0 ? random_str($p_size, $crt) : '');
         $mode = ($mod == 'true' ? $batch_pswd : ($mod == 'username_only' ? '' : $batch_user));
         $post_qty = array(
