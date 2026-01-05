@@ -22,7 +22,44 @@ function connect_mikrotik_user($u, $Bsk, $Router, $Auth) {
     return $Router->connect($nas['nasname'].$ports, $nas['username'], $Auth->decrypt($nas['password'], 'BSK-RAHMAD'));
 }
 
-// Handle Actions
+// Handle Batch Delete (from remove[] checkboxes in JS)
+if(isset($_POST['delete_batch'])){
+    $ids = $_POST['delete_batch'];
+    if(!is_array($ids)){
+        $ids = array($ids);
+    }
+    
+    foreach($ids as $id_val){
+        $id = Rahmad($id_val);
+        // 1. Get username from ID
+        $info = $Bsk->Show("radcheck", "username", "id='$id'");
+        
+        if($info){
+            $u = $info['username'];
+            
+            // 2. Disconnect User
+            if(connect_mikrotik_user($u, $Bsk, $Router, $Auth)){
+                 $uid = $Router->comm("/ip/hotspot/active/print", array("?user" => $u));
+                 foreach($uid as $user_active) { $Router->comm("/ip/hotspot/active/remove", array(".id" => $user_active['.id'])); }
+                 $ppp_id = $Router->comm("/ppp/active/print", array("?name" => $u));
+                 foreach($ppp_id as $ppp_active) { $Router->comm("/ppp/active/remove", array(".id" => $ppp_active['.id'])); }
+                 $Router->disconnect();
+            }
+
+            // 3. Delete from Radcheck and other tables
+            $Bsk->Delete("radacct", array("username" => $u));
+            $Bsk->Delete("radcheck", array("username" => $u));
+            $Bsk->Delete("radreply", array("username" => $u));
+            $Bsk->Delete("radusergroup", array("username" => $u));
+            $Bsk->Delete("custom_usage", array("username" => $u));
+            $Bsk->Delete("daily_usage", array("username" => $u));
+        }
+    }
+    echo json_encode(array("status"=>true, "message"=>"Users deleted"));
+    exit;
+}
+
+// Handle Single Delete
 if(isset($_POST['delete'])){
     $id = Rahmad($_POST['delete']);
     // 1. Get username from ID (since JS sends ID)
@@ -175,7 +212,14 @@ if(isset($_GET['data'])){
         "radcheck a left join radusergroup b on a.username = b.username", 
         "a.id, a.username, b.groupname as profiles, a.description, a.created", 
         "a.identity = '$Menu[identity]' and a.attribute = 'Cleartext-Password' ".$getGroup, 
-        array("a.username")
+        // FIX: Map columns to match DataTables index for correct sorting
+        // 0:id, 1:status, 2:username, 3:fname, 4:lname, 5:expiration, 6:parent, 7:profile, ...
+        // We only map the ones we want to sort by:
+        array(
+            2 => "a.username", 
+            7 => "b.groupname", 
+            5 => "a.created" // Mapping creation date to expiration col index for now, as real expiration is hard to sort in SQL
+        ) 
     );
 
     // Filter logic for pwdless query

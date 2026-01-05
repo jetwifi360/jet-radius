@@ -212,10 +212,14 @@ function Themes(data) {
 }
 
 function Remove() {
-    var totsl = $('input[name="remove[]"]:checked').length;
+    var checked = $('input[name="remove[]"]:checked');
+    var total = checked.length;
+    
+    if (total <= 0) return;
+
     swal({
         title: "Are you sure!",
-        text: "Delete permanent this (" + totsl + ") data?",
+        text: "Delete permanent this (" + total + ") data?",
         type: "warning",
         showCancelButton: true,
         confirmButtonText: "Yes, delete it!",
@@ -225,29 +229,38 @@ function Remove() {
         closeOnCancel: true
     }, function (isConfirm) {
         if (isConfirm) {
-            $('input[name="remove[]"]:checked').each(function () {
-                $.ajax({
-                    headers: {
-                        "Api": $.cookie("BSK_API"),
-                        "Key": $.cookie("BSK_KEY"),
-                        "Accept": "application/json"
-                    },
-                    url: "./api/users",
-                    method: "POST",
-                    data: {
-                        'delete': $(this).val()
-                    }
-                });
+            // Collect all IDs
+            var ids = [];
+            checked.each(function () {
+                ids.push($(this).val());
             });
-            swal({
-                title: "Delete!",
-                text: "Delete data success",
-                timer: 2000,
-                type: 'success'
+
+            $.ajax({
+                headers: {
+                    "Api": $.cookie("BSK_API"),
+                    "Key": $.cookie("BSK_KEY"),
+                    "Accept": "application/json"
+                },
+                url: "./api/users",
+                method: "POST",
+                data: {
+                    'delete_batch': ids // Send array of IDs
+                },
+                success: function(response) {
+                    swal({
+                        title: "Delete!",
+                        text: "Delete data success",
+                        timer: 2000,
+                        type: 'success'
+                    });
+                    $('#CheckAll').prop('checked', false);
+                    $('.dataTable').DataTable().ajax.reload();
+                    $('#tables_wrapper .dataTables_length button.btn-danger').attr('disabled', true);
+                },
+                error: function() {
+                    swal("Error", "Failed to delete users", "error");
+                }
             });
-            $('#CheckAll').prop('checked', false);
-            $('.dataTable').DataTable().ajax.reload();
-            $('#tables_wrapper .dataTables_length button.btn-danger').attr('disabled', true);
         }
     });
 };
