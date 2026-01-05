@@ -534,7 +534,8 @@ function applyGridStyles(cols){
 @page { size: A4; margin: 0; }
 html, body { background: #fff !important; margin: 0 !important; height: 100%; }
 .print-container {
-    width: 210mm;
+    width: 100%;
+    max-width: 210mm;
     margin: 0 auto;
     background: #fff !important;
 }
