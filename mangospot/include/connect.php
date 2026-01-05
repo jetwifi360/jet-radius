@@ -125,12 +125,21 @@ class Connect extends PDO{
 		$sql = $where;
 		$search = array();
 		if(!empty($requestData['search']['value'])){
+			// Clean the search term
+			$searchTerm = strtolower($requestData['search']['value']);
+			
+			// Only apply search filter if the term matches specific username patterns 
+			// (e.g., alphanumeric, min length 2) to avoid matching common substrings in other columns if you were searching multiple cols.
+			// But since we are only searching 'username', we just apply strict logic.
+			
 			foreach($columns as $colums){
 				if($this->sql == 'pgsql'){
-					$search[] ="lower($colums::text) LIKE '%".strtolower($requestData['search']['value'])."%' ";
+					$search[] ="lower($colums::text) LIKE '".$searchTerm."%' ";
 				} else {
-					// Prefix match: Only match from the beginning of the string (e.g. 'CA4%' not '%CA4%')
-					$search[] ="lower(CAST($colums AS CHAR)) LIKE '".strtolower($requestData['search']['value'])."%' ";
+					// STRICT PREFIX MATCH for all columns in the search list.
+					// Since we only passed "a.username" in users.php, this will now generate:
+					// AND (lower(CAST(a.username AS CHAR)) LIKE 'aj7594%')
+					$search[] ="lower(CAST($colums AS CHAR)) LIKE '".$searchTerm."%' ";
 				}
 			}
 			$sql.= " AND (".implode(' OR ', $search).")";
