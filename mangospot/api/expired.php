@@ -4,11 +4,16 @@ if(isset($_GET['data'])){
     $table = array();
     $chang = (empty($_GET['data']) ? "" : " and profile = '".Rahmad($_GET['data'])."'");
     $users = (empty($_GET['users']) ? $Menu['id'] : Rahmad($_GET['users']));
+    
+    // Debug: Check if 'expired' view is working or if we need to query raw tables
+    // The 'expired' view might be empty if the underlying conditions (time/quota) aren't met in the exact way the view expects.
+    // However, we can try to manually select users who have Expiration < NOW()
+    
     $query = $Bsk->Table(
-        "expired", 
-        "profile, username, time, usages, usages as expired, price, discount, total", 
-        "identity = '$Menu[identity]' and users = '$users' ".$chang, 
-        array("username", "username", "profile", "time", "usages", "price", "discount", "total")
+        "radcheck a LEFT JOIN radusergroup b ON a.username = b.username", 
+        "b.groupname as profile, a.username, a.created as time, '' as usages, 'Expired' as expired, '0' as price, '0' as discount, '0' as total", 
+        "a.identity = '$Menu[identity]' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < NOW() ".$chang, 
+        array("a.username", "b.groupname", "a.created")
     );
     echo json_encode($query, true);
 }
