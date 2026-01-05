@@ -2,7 +2,8 @@
 $radius = ($Menu['data'] ? " inner join packet c on a.groupname = c.groupname " : "and a.users = '$Menu[id]'");
 if(isset($_GET['data'])){
     $table = array();
-    $chang = (empty($_GET['data']) ? "" : " and profile = '".Rahmad($_GET['data'])."'");
+    // Use addslashes to prevent SQL syntax errors from quotes in the input
+    $chang = (empty($_GET['data']) ? "" : " and profile = '".addslashes(Rahmad($_GET['data']))."'");
     $users = (empty($_GET['users']) ? $Menu['id'] : Rahmad($_GET['users']));
     
     // Debug: Check if 'expired' view is working or if we need to query raw tables
@@ -12,7 +13,8 @@ if(isset($_GET['data'])){
     $query = $Bsk->Table(
         "radcheck a LEFT JOIN radusergroup b ON a.username = b.username", 
         "b.groupname as profile, a.username, a.created as time, '' as usages, 'Expired' as expired, '0' as price, '0' as discount, '0' as total", 
-        "a.identity = '$Menu[identity]' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < NOW() ".$chang, 
+        // FIX: Use {$Menu['identity']} for correct string interpolation
+        "a.identity = '{$Menu['identity']}' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < NOW() ".$chang, 
         array("a.username", "b.groupname", "a.created")
     );
     echo json_encode($query, true);
