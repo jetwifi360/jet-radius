@@ -1,32 +1,58 @@
-# FreeRADIUS Backup & Restore
+# JetWifi Radius & Mangospot System
 
-This repository contains scripts to backup and restore a FreeRADIUS server configuration, including the MySQL database.
+This repository serves as a complete backup and installer for the JetWifi FreeRADIUS and Mangospot system.
 
-## Contents
+## Repository Structure
 
-- `scripts/backup.sh`: Creates a compressed backup of `/etc/freeradius/3.0` and the MySQL database.
-- `scripts/restore.sh`: Installs dependencies and restores the configuration and database from a backup file.
+- `freeradius/`: Contains the FreeRADIUS 3.0 configuration files.
+- `mangospot/`: Contains the Mangospot web application files.
+- `database/`: Contains the MySQL database dump (`mangospot.sql`).
+- `scripts/backup.sh`: Script to sync the current system state INTO this repository.
+- `install.sh`: Script to install dependencies and deploy the system FROM this repository.
 
 ## Usage
 
-### Backup
+### 1. Backing Up (On Source Machine)
 
-Run the backup script on the source machine:
+To update the backup in this repository with the current state of your server:
 
-```bash
-./scripts/backup.sh
-```
+1. Clone this repository (if not already done).
+2. Run the backup script:
+   ```bash
+   ./scripts/backup.sh
+   ```
+   *Note: You may be prompted for your sudo password.*
+   
+3. Commit and push the changes to GitHub:
+   ```bash
+   git add .
+   git commit -m "Backup update: $(date)"
+   git push origin main
+   ```
 
-This will generate a file named `radius_backup_YYYYMMDD_HHMMSS.tar.gz`.
+### 2. Installing / Restoring (On New Machine)
 
-### Restore
+To deploy the system on a fresh Ubuntu server:
 
-Transfer the backup file and the `scripts/restore.sh` script to the target machine.
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/jetwifi360/jet-radius.git
+   cd jet-radius
+   ```
 
-Run the restore script:
+2. Run the installation script as root:
+   ```bash
+   sudo ./install.sh
+   ```
 
-```bash
-sudo ./scripts/restore.sh radius_backup_YYYYMMDD_HHMMSS.tar.gz
-```
+The script will:
+- Install all required dependencies (Apache, MySQL, FreeRADIUS, PHP, etc.).
+- Configure the database and import the SQL dump.
+- Deploy the web application to `/var/www/html/mangospot`.
+- Deploy the FreeRADIUS configuration to `/etc/freeradius/3.0`.
+- Set appropriate permissions and restart services.
 
-**Note:** The scripts assume the database name is `mangospot`, user is `mangospot`, and password is `JetWifiAdmin123`. You may need to edit the scripts if these credentials change.
+**Note:** The system assumes the database credentials are:
+- DB Name: `mangospot`
+- User: `mangospot`
+- Password: `JetWifiAdmin123`

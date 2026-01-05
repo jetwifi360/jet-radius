@@ -2,43 +2,39 @@
 set -e
 
 # Configuration
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_DIR="radius_backup_${TIMESTAMP}"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 DB_USER="mangospot"
 DB_PASS="JetWifiAdmin123"
 DB_NAME="mangospot"
 
-# Create backup directory
-mkdir -p "${BACKUP_DIR}/config"
-mkdir -p "${BACKUP_DIR}/db"
-mkdir -p "${BACKUP_DIR}/www"
+echo "Repo Root: $REPO_ROOT"
+
+# Create directories in the repo
+mkdir -p "${REPO_ROOT}/freeradius"
+mkdir -p "${REPO_ROOT}/mangospot"
+mkdir -p "${REPO_ROOT}/database"
 
 echo "Backing up FreeRADIUS configuration..."
-# Copy all FreeRADIUS configuration files
-# Using . to copy contents including hidden files if any, but * is usually fine.
-# The previous error "cannot stat" might be due to shell expansion in sudo.
-sudo cp -r /etc/freeradius/3.0/. "${BACKUP_DIR}/config/"
+# Sync FreeRADIUS config
+if [ -d "/etc/freeradius/3.0" ]; then
+    sudo rsync -av --delete --exclude 'certs/*.pem' --exclude 'certs/*.key' /etc/freeradius/3.0/ "${REPO_ROOT}/freeradius/"
+else
+    echo "Error: /etc/freeradius/3.0 not found!"
+    exit 1
+fi
 
 echo "Backing up Mangospot Web App..."
-# Copy web application files
+# Sync Web App
 if [ -d "/var/www/html/mangospot" ]; then
-    sudo cp -r /var/www/html/mangospot "${BACKUP_DIR}/www/"
+    sudo rsync -av --delete /var/www/html/mangospot/ "${REPO_ROOT}/mangospot/"
 else
     echo "Warning: /var/www/html/mangospot not found!"
 fi
 
 echo "Backing up MySQL database..."
-# Dump the MySQL database
-mysqldump -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" > "${BACKUP_DIR}/db/${DB_NAME}.sql"
+# Dump Database
+mysqldump -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" > "${REPO_ROOT}/database/${DB_NAME}.sql"
 
-echo "Compressing backup..."
-# Create a tarball of the backup directory
-# Use sudo to ensure we can read all files (some config files might have restrictive permissions)
-sudo tar -czf "${BACKUP_DIR}.tar.gz" "${BACKUP_DIR}"
-
-# Cleanup
-sudo rm -rf "${BACKUP_DIR}"
-
-echo "Backup completed: ${BACKUP_DIR}.tar.gz"
-# Change ownership to current user so they can copy it
-sudo chown $USER:$USER "${BACKUP_DIR}.tar.gz"
+echo "Backup updated in ${REPO_ROOT}"
+echo "You can now commit and push these changes to GitHub."
