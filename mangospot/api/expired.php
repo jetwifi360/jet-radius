@@ -3,7 +3,7 @@ $radius = ($Menu['data'] ? " inner join packet c on a.groupname = c.groupname " 
 if(isset($_GET['data'])){
     $table = array();
     // Use addslashes to prevent SQL syntax errors from quotes in the input
-    $chang = (empty($_GET['data']) ? "" : " and profile = '".addslashes(Rahmad($_GET['data']))."'");
+    $chang = (empty($_GET['data']) ? "" : " and b.groupname = '".addslashes(Rahmad($_GET['data']))."'");
     $users = (empty($_GET['users']) ? $Menu['id'] : Rahmad($_GET['users']));
     
     // Debug: Check if 'expired' view is working or if we need to query raw tables
