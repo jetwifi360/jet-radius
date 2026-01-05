@@ -565,8 +565,52 @@ if(isset($_POST['qty'])){
             }
         }
     }
+
+    // --- INTEGRATION: CREATE BATCH RECORD FOR VOUCHER PRINTING ---
+    $current_year = date('Y');
+    // Find max sequence for current year to generate Series ID
+    $last_batch = $Bsk->Show("card_batches", "batch_name", "batch_name LIKE '$current_year:%' ORDER BY id DESC LIMIT 1");
+    if($last_batch && isset($last_batch['batch_name'])){
+        $parts = explode(':', $last_batch['batch_name']);
+        if(count($parts) == 2 && is_numeric($parts[1])){
+            $next_seq = intval($parts[1]) + 1;
+        } else {
+            $next_seq = 1;
+        }
+    } else {
+        $next_seq = 1;
+    }
+    $batch_name = $current_year . ':' . $next_seq;
+    
+    // Get Price
+    $profil = Rahmad($_POST['groupname']);
+    $price_res = $Bsk->Show("radprice", "price", "groupname='$profil'");
+    if($price_res){
+        $unit_price = $price_res['price'];
+    } else {
+        $price_res = $Bsk->Show("radgroupreply", "value", "groupname='$profil' and attribute='Unit-Price'");
+        $unit_price = $price_res ? $price_res['value'] : 0;
+    }
+
+    // Insert Batch
+    $batch_data = array(
+        "batch_name" => $batch_name,
+        "profile" => $profil,
+        "unit_price" => $unit_price,
+        "quantity" => $qty,
+        "created_by" => ($Menu['username'] ?? ($Users['username'] ?? 'admin')),
+        "expiration_date" => (isset($_POST['expiration']) && !empty($_POST['expiration'])) ? $_POST['expiration'] : date('Y-m-d', strtotime('+1 year'))
+    );
+    $Bsk->Insert("card_batches", $batch_data);
+    $batch_info = $Bsk->Show("card_batches", "id", "batch_name='$batch_name'");
+    $batch_id = ($batch_info && isset($batch_info['id'])) ? $batch_info['id'] : 0;
+    // -------------------------------------------------------------
+
     for($o=0; $o<$qty; $o++){
-        $batch_user = $prf.random_str($lng, $crt);
+        // Generate Serial Number
+        $serial_number = $batch_name . '-' . str_pad($o+1, strlen($qty), '0', STR_PAD_LEFT);
+
+        $batch_user = $prefix.random_str($lng, $crt);
         $batch_pswd = ($p_size > 0 ? random_str($p_size, $crt) : '');
         $mode = ($mod == 'true' ? $batch_pswd : ($mod == 'username_only' ? '' : $batch_user));
         $post_qty = array(
@@ -588,7 +632,13 @@ if(isset($_POST['qty'])){
         $Bsk->Insert("userinfo", array(
             "username" => $batch_user,
             "creationby" => ($Menu['username'] ?? 'admin'),
-            "creationdate" => date('Y-m-d H:i:s')
+            "creationdate" => date('Y-m-d H:i:s'),
+            // Add Batch Info
+            "batch_id" => $batch_id,
+            "serial_number" => $serial_number,
+            "unit_price" => $unit_price,
+            "firstname" => "Batch $batch_name",
+            "lastname" => "Serial $serial_number"
         ));
         $Bsk->Insert("radusergroup", 
             array(
