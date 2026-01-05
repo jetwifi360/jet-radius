@@ -106,10 +106,14 @@ var brunette = function () {
 	});
 	$(document).on('click', '#navtop_light_select', function (e) {
 		$navbar.removeClass('navbar-dark').addClass('navbar-light').find('img.brand-img').attr('src', 'dist/img/logo-light.png');
+		// Force text color for navbar links in light mode
+		$('.hk-navbar .navbar-nav .nav-item .nav-link').css('color', '#324148');
 		return false;
 	});
 	$(document).on('click', '#navtop_dark_select', function (e) {
 		$navbar.removeClass('navbar-light').addClass('navbar-dark').find('img.brand-img').attr('src', 'dist/img/logo-dark.png');
+		// Force text color for navbar links in dark mode
+		$('.hk-navbar .navbar-nav .nav-item .nav-link').css('color', 'rgba(255, 255, 255, 0.8)');
 		return false;
 	});
 	if ($('.scroll-nav-switch').length > 0) {
