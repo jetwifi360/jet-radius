@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Voucher Designer</title>
+  <link rel="stylesheet" type="text/css" href="dist/css/style.css">
+  <link rel="shortcut icon" href="favicon.ico">
+  <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+</head>
+<body>
+  <div class="container-fluid mt-3">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="#">Radius</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Voucher Designer</li>
+      </ol>
+    </nav>
+      <div class="container">
+    <div class="row">
+      <div class="col-md-3">
+        <div class="card">
+          <div class="card-header">Properties</div>
+          <div class="card-body">
+            <input type="hidden" id="tpl-id" />
+            <input type="hidden" id="tpl-name" />
+            <div class="form-group">
+              <label>Templates</label>
+              <select id="tpl-list" class="form-control"></select>
+            </div>
+            <button class="btn btn-primary" id="start-new"><i class="fa fa-plus"></i> Add New</button>
+            <hr/>
+            <div id="editor-panel" style="display:none;">
+              <div class="form-group">
+                <label>Background</label>
+                <input type="file" id="bg-file" class="form-control" accept="image/*" />
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-success" id="save-tpl"><i class="fa fa-save"></i> Save</button>
+                <button class="btn btn-primary" id="update-tpl"><i class="fa fa-refresh"></i> Update</button>
+                <button class="btn btn-danger" id="delete-tpl"><i class="fa fa-trash"></i> Delete</button>
+              </div>
+              
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">Card Designer</div>
+          <div class="card-body">
+            <canvas id="designer-canvas" width="600" height="350" style="border:1px solid #ccc"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card">
+          <div class="card-header">Tools</div>
+          <div class="card-body">
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[username]">Username</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[password]">Password</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[serial_number]">Serial</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[profile]">Profile</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[price]">Price</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[data]">Data</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[qr_code]">QR Code</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[label]">Label</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row mt-3">
+      <div class="col-md-12">
+        <div class="card">
+          <div class="card-header">Selected Item</div>
+          <div class="card-body">
+            <div id="prop-panel-bottom" class="row g-2">
+              <div class="col-md-3">
+                <label class="small mb-1" for="prop-sample-bottom">Text</label>
+                <input type="text" id="prop-sample-bottom" class="form-control" placeholder="Sample Value" />
+              </div>
+              <div class="col-md-2">
+                <label class="small mb-1" for="prop-size-bottom">Font Size</label>
+                <input type="number" id="prop-size-bottom" class="form-control" min="8" max="96" placeholder="Font Size" />
+              </div>
+              <div class="col-md-2">
+                <label class="small mb-1" for="prop-family-bottom">Font Family</label>
+                <select id="prop-family-bottom" class="form-control">
+                  <option>Arial</option>
+                  <option>Verdana</option>
+                  <option>Tahoma</option>
+                  <option>Courier New</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="small mb-1" for="prop-bold-bottom">Bold</label>
+                <input type="checkbox" id="prop-bold-bottom" class="form-control" style="height:auto;" />
+              </div>
+              <div class="col-md-2">
+                <label class="small mb-1" for="prop-color-bottom">Font Color</label>
+                <input type="color" id="prop-color-bottom" class="form-control" />
+              </div>
+              <div class="col-md-1">
+                <label class="small mb-1" for="prop-x-bottom">X</label>
+                <input type="number" id="prop-x-bottom" class="form-control" placeholder="X" />
+              </div>
+              <div class="col-md-1">
+                <label class="small mb-1" for="prop-y-bottom">Y</label>
+                <input type="number" id="prop-y-bottom" class="form-control" placeholder="Y" />
+              </div>
+              <div class="col-md-1">
+                <label class="small mb-1" for="prop-w-bottom">W</label>
+                <input type="number" id="prop-w-bottom" class="form-control" placeholder="W" />
+              </div>
+              <div class="col-md-1">
+                <label class="small mb-1" for="prop-h-bottom">H</label>
+                <input type="number" id="prop-h-bottom" class="form-control" placeholder="H" />
+              </div>
+              <div class="col-md-1">
+                <button class="btn btn-outline-danger btn-sm w-100" id="remove-item-bottom"><i class="fa fa-trash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/jquery/dist/jquery.min.js"></script>
+  <script src="vendors/jquery-cookie/jquery.cookie.js"></script>
+  <script src="vendors/jquery-toast/jquery.toast.js"></script>
+  <script src="dist/js/controls.js"></script>
+  
+  <script src="dist/js/designer.js"></script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+var url = window.location.pathname;
+var filename = url.substring(url.lastIndexOf('/') + 1);
+
+function ucword(data) {
+    var result = data.replace('.html', '').toLowerCase().replace(/\b[a-z]/g, function (letter) {
+        return letter.toUpperCase();
+    });
+    return result;
+}
+
+function Logout() {
+    // Clear all cookies using document.cookie for reliability
+    var cookies = document.cookie.split(";");
+    for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i];
+        var eqPos = cookie.indexOf("=");
+        var name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+        if (name.startsWith('BSK_')) {
+            document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+        }
+    }
+    // Also clear using jQuery if available
+    if (typeof $.cookie !== 'undefined') {
+        $.removeCookie("BSK_API");
+        $.removeCookie("BSK_KEY");
+        $.removeCookie("BSK_AUTH");
+        $.removeCookie("BSK_TOKEN");
+    }
+    // Force redirect with cache busting
+    window.location.href = 'login.html?' + new Date().getTime();
+};
+$('body').on('click', 'a.logout', function () {
+    Logout();
+});
+
+$.ajax({
+    url: "./api/data",
+    method: "GET",
+    data: "identity",
+    dataType: "JSON",
+    success: function (identity) {
+        $('link[rel="shortcut icon"]').attr('href', identity.data.icon);
+        $('img.brand-img').attr('src', identity.data.logo).attr('alt', identity.data.title);
+        $('title').html(identity.data.data + ' | ' + (filename ? ucword(filename) : 'Dashboard') + ' ' + identity.data.title);
+    }
+});
+$.ajax({
+    url: "./api/data",
+    method: "GET",
+    data: "config",
+    dataType: "JSON",
+    success: function (config) {
+        var OneSignal = window.OneSignal || [];
+        OneSignal.push(function () {
+            OneSignal.init({
+                appId: config.data.on_api,
+                autoResubscribe: true,
+            });
+            if ($.cookie("BSK_AUTH")) {
+                OneSignal.sendTag("key", $.cookie("BSK_AUTH"));
+            } else {
+                OneSignal.deleteTag("key");
+            }
+        });
+    }
+});
+$.ajax({
+    url: "./api/data",
+    headers: {
+        "Api": $.cookie("BSK_API"),
+        "Key": $.cookie("BSK_KEY"),
+        "Accept": "application/json"
+    },
+    method: "GET",
+    data: "accept",
+    dataType: "JSON",
+    success: function (accept) {
+        var fname = ucword(filename);
+        if (accept && accept.status && accept.data && jQuery.inArray(fname, accept.data) == -1) {
+            window.location = './';
+        }
+    },
+    error: function () {
+    }
+});
+$('[data-include]').each(function (index, element) {
+    var target = $(this).data('include');
+    $(this).load(target, function () {
+        $.ajax({
+            url: "./api/data",
+            headers: {
+                "Api": $.cookie("BSK_API"),
+                "Key": $.cookie("BSK_KEY"),
+                "Accept": "application/json"
+            },
+            method: "GET",
+            data: "menu",
+            dataType: "JSON",
+            success: function (data) {
+                var render = function(tree){
+                    var html = '';
+                    $.each(tree, function (i, menu) {
+                        html += '<ul class="navbar-nav flex-column">';
+                        html += '<li class="nav-item">';
+                        var hasChildren = (menu.children && menu.children.length);
+                        if (hasChildren) {
+                            html += '<a class="nav-link" href="javascript:void(0);" data-toggle="collapse" data-target="#page_' + menu.id + '">';
+                        } else {
+                            html += '<a class="nav-link" href="' + menu.value + '.html">';
+                        }
+                        html += '<i class="material-icons">' + menu.icon + '</i>';
+                        html += '<span class="nav-link-text">' + menu.name + '</span>';
+                        html += '</a>';
+                        html += '<ul id="page_' + menu.id + '" class="nav flex-column collapse collapse-level-1">';
+                        html += '<li class="nav-item">';
+                        if (hasChildren) {
+                            html += '<ul class="nav flex-column">';
+                            $.each(menu.children, function (index, subs) {
+                                var hasGrand = (subs.children && subs.children.length);
+                                html += '<li class="nav-item">';
+                                if (hasGrand) {
+                                    html += '<a class="nav-link" href="javascript:void(0);" data-toggle="collapse" data-target="#page_' + subs.id + '">' + subs.name + '</a>';
+                                    html += '<ul id="page_' + subs.id + '" class="nav flex-column collapse collapse-level-1">';
+                                    $.each(subs.children, function (j, subs2) {
+                                        html += '<li class="nav-item">';
+                                        html += '<a class="nav-link" href="' + subs2.value + '.html">' + subs2.name + '</a>';
+                                        html += '</li>';
+                                    });
+                                    html += '</ul>';
+                                } else {
+                                    html += '<a class="nav-link" href="' + subs.value + '.html">' + subs.name + '</a>';
+                                }
+                                html += '</li>';
+                            });
+                            html += '</ul>';
+                        }
+                        html += '</li>';
+                        html += '</ul>';
+                        html += '</li>';
+                        html += '</ul>';
+                    });
+                    $('#list-menu').html(html).find("a[href='" + (filename ? filename : './') + "']").each(function () {
+                        $(this).closest('li.nav-item').addClass("active");
+                        $(this).closest('ul.collapse').addClass('show');
+                    });
+                };
+                render(data.data || []);
+            },
+            error: function(){
+                var card_id = 99999;
+                var fallback = [
+                    {id: card_id, name:'Card Designer', value:'card_designer', icon:'style', slug:0, children:[
+                        {id:99998, name:'Html Theme Designer', value:'themes', icon:'code', slug:card_id},
+                        {id:99997, name:'Drag and Drop Designer', value:'designer', icon:'edit', slug:card_id},
+                        {id:99996, name:'Direct Generator', value:'direct_generator', icon:'confirmation_number', slug:card_id}
+                    ]}
+                ];
+                var render = function(tree){
+                    var html = '';
+                    $.each(tree, function (i, menu) {
+                        html += '<ul class="navbar-nav flex-column">';
+                        html += '<li class="nav-item">';
+                        var hasChildren = (menu.children && menu.children.length);
+                        if (hasChildren) {
+                            html += '<a class="nav-link" href="javascript:void(0);" data-toggle="collapse" data-target="#page_' + menu.id + '">';
+                        } else {
+                            html += '<a class="nav-link" href="' + menu.value + '.html">';
+                        }
+                        html += '<i class="material-icons">' + menu.icon + '</i>';
+                        html += '<span class="nav-link-text">' + menu.name + '</span>';
+                        html += '</a>';
+                        html += '<ul id="page_' + menu.id + '" class="nav flex-column collapse collapse-level-1">';
+                        html += '<li class="nav-item">';
+                        if (hasChildren) {
+                            html += '<ul class="nav flex-column">';
+                            $.each(menu.children, function (index, subs) {
+                                var hasGrand = (subs.children && subs.children.length);
+                                html += '<li class="nav-item">';
+                                if (hasGrand) {
+                                    html += '<a class="nav-link" href="javascript:void(0);" data-toggle="collapse" data-target="#page_' + subs.id + '">' + subs.name + '</a>';
+                                    html += '<ul id="page_' + subs.id + '" class="nav flex-column collapse collapse-level-1">';
+                                    $.each(subs.children, function (j, subs2) {
+                                        html += '<li class="nav-item">';
+                                        html += '<a class="nav-link" href="' + subs2.value + '.html">' + subs2.name + '</a>';
+                                        html += '</li>';
+                                    });
+                                    html += '</ul>';
+                                } else {
+                                    html += '<a class="nav-link" href="' + subs.value + '.html">' + subs.name + '</a>';
+                                }
+                                html += '</li>';
+                            });
+                            html += '</ul>';
+                        }
+                        html += '</li>';
+                        html += '</ul>';
+                        html += '</li>';
+                        html += '</ul>';
+                    });
+                    $('#list-menu').html(html).find("a[href='" + (filename ? filename : './') + "']").each(function () {
+                        $(this).closest('li.nav-item').addClass("active");
+                        $(this).closest('ul.collapse').addClass('show');
+                    });
+                };
+                render(fallback);
+            }
+        });
+        $('body').find("a[href='" + (filename ? filename : './') + "']").each(function () {
+            $(this).closest('li.nav-item').addClass("active");
+            $(this).closest('ul.collapse').addClass('show');
+        });
+    });
+});
+$.ajax({
+    url: "./api/index.php?pages=profile",
+    headers: {
+        "Api": $.cookie("BSK_API"),
+        "Key": $.cookie("BSK_KEY"),
+        "Accept": "application/json"
+    },
+    method: "GET",
+    data: "data",
+    dataType: "JSON",
+    success: function (account) {
+        if (account.status) {
+            $.each(account.data, function (i, user) {
+                $('.user_' + i).html(user);
+            });
+            if (account.data.image) {
+                $('.user-image').attr('src', account.data.image);
+            }
+        }
+    }
+});
+$('form[id^=import-]').each(function (index, element) {
+    var id = $(this).attr('id').replace('import-', '');
+    var action = $(this).attr('action');
+    var method = $(this).attr('method');
+    var modals = $(this).data('modal');
+    var extent = $(this).data('extension');
+    $('#import-' + id).validate({
+        errorElement: "span",
+        errorClass: 'help-block',
+        ignore: "required",
+        rules: {
+            file: {
+                required: true,
+                extension: extent ? extent : "xls"
+            }
+        },
+        highlight: function (element) {
+            $(element).closest('.help-block').removeClass('valid');
+            $(element).closest('.form-group').removeClass('has-success').addClass('has-error').find('.symbol').removeClass('ok').addClass('required');
+        },
+        unhighlight: function (element) {
+            $(element).closest('.form-group').removeClass('has-error');
+        },
+        success: function (label, element) {
+            label.addClass('help-block valid');
+            $(element).closest('.form-group').removeClass('has-error').addClass('has-success').find('.symbol').removeClass('required').addClass('ok');
+        },
+        submitHandler: function (form) {
+            var formData = form;
+            var formData = new FormData(formData);
+            $.ajax({
+                url: "./api/index.php?pages=" + action,
+                headers: {
+                    "Api": $.cookie("BSK_API"),
+                    "Key": $.cookie("BSK_KEY"),
+                    "Accept": "application/json"
+                },
+                method: method,
+                dataType: "JSON",
+                data: formData,
+                mimeType: "multipart/form-data",
+                contentType: false,
+                cache: false,
+                processData: false,
+                beforeSend: function () {
+                    $('button[type=submit]', '#import-' + id).prop('disabled', true);
+                },
+                success: function (response) {
+                    $.toast({
+                        heading: "Import " + ucword(id),
+                        text: response.data,
+                        position: 'bottom-right',
+                        icon: response.message
+                    });
+                    if (typeof modals == 'undefined') {
+                        $('#add-' + id).modal('hide');
+                        $('.dataTable').DataTable().ajax.reload();
+                    }
+                    $('#import-' + id).trigger('reset');
+                    $('button[type=submit]', '#import-' + id).prop('disabled', true);
+                }
+            });
+        }
+    });
+});
+$('form[id^=form-]').each(function (index, element) {
+    var id = $(this).attr('id').replace('form-', '');
+    var action = $(this).attr('action');
+    var method = $(this).attr('method');
+    var modals = $(this).data('modal');
+    var resets = $(this).data('reset');
+    $("#form-" + id).validate({
+        errorElement: "span",
+        errorClass: 'help-block',
+        ignore: "required",
+        highlight: function (element) {
+            $(element).closest('.help-block').removeClass('valid');
+            $(element).closest('.form-group').removeClass('has-success').addClass('has-error').find('.symbol').removeClass('ok').addClass('required');
+        },
+        unhighlight: function (element) {
+            $(element).closest('.form-group').removeClass('has-error');
+        },
+        success: function (label, element) {
+            label.addClass('help-block valid');
+            $(element).closest('.form-group').removeClass('has-error').addClass('has-success').find('.symbol').removeClass('required').addClass('ok');
+        },
+        submitHandler: function (form) {
+            $.ajax({
+                url: "./api/index.php?pages=" + action,
+                headers: {
+                    "Api": $.cookie("BSK_API"),
+                    "Key": $.cookie("BSK_KEY"),
+                    "Accept": "application/json"
+                },
+                method: method,
+                dataType: "JSON",
+                data: $(form).serialize(),
+                beforeSend: function () {
+                    $('button[type=submit]', "#form-" + id).attr('disabled', true);
+                },
+                success: function (response) {
+                    if (id == 'login') {
+                        if (response.status) {
+                            $.cookie("BSK_API", response.data.api, {
+                                expires: response.data.exp
+                            });
+                            $.cookie("BSK_KEY", response.data.key, {
+                                expires: response.data.exp
+                            });
+                            $.cookie("BSK_AUTH", response.data.auth, {
+                                expires: response.data.exp
+                            });
+                            $.cookie("BSK_TOKEN", response.data.token, {
+                                expires: response.data.exp
+                            });
+                            window.location = './';
+                        }
+                    } else {
+                        if (typeof modals == 'undefined') {
+                            $('#add-' + id).modal('hide');
+                            $('.dataTable').DataTable().ajax.reload();
+                        }
+                    }
+                    $.toast({
+                        heading: ucword(id),
+                        text: response.data,
+                        position: 'bottom-right',
+                        icon: response.message
+                    });
+                    if (typeof resets == 'undefined') {
+                        $('#form-' + id).trigger('reset');
+                    }
+                    $('a[class^=refresh-]').trigger('click');
+                    $('button[type=submit]', "#form-" + id).attr('disabled', false);
+                }
+            });
+        }
+    });
+});
+$('body').on('click', 'button[name="active"]', function () {
+    $.ajax({
+        url: "./api/" + $(this).data('target'),
+        headers: {
+            "Api": $.cookie("BSK_API"),
+            "Key": $.cookie("BSK_KEY"),
+            "Accept": "application/json"
+        },
+        method: "POST",
+        data: {
+            "active": $(this).val()
+        },
+        success: function (active) {
+            $('.dataTable').DataTable().ajax.reload();
+        }
+    });
+});
+$('body').on('click', 'a.refresh-tabel', function () {
+    $('.dataTable').DataTable().ajax.reload();
+});
+$('body').on('click', '[href="#delete"]', function () {
+    var id_delete = $(this).data("value");
+    var url_delete = $(this).data('target');
+    swal({
+        title: "Are you sure!",
+        text: "Delete permanent this data?",
+        type: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+        showLoaderOnConfirm: true,
+        closeOnConfirm: false,
+        closeOnCancel: true
+    }, function (isConfirm) {
+        if (isConfirm) {
+            $.ajax({
+                url: "./api/" + url_delete,
+                headers: {
+                    "Api": $.cookie("BSK_API"),
+                    "Key": $.cookie("BSK_KEY"),
+                    "Accept": "application/json"
+                },
+                method: "POST",
+                dataType: "JSON",
+                data: {
+                    'delete': id_delete
+                },
+                success: function (remove) {
+                    $('a[class^=refresh-]').trigger('click');
+                    $('.dataTable').DataTable().ajax.reload();
+                    swal({
+                        title: "Delete!",
+                        text: remove.data,
+                        timer: 2000,
+                        type: remove.message
+                    });
+                }
+            })
+        }
+    });
+});

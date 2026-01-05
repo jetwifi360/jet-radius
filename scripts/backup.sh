@@ -27,7 +27,7 @@ fi
 echo "Backing up Mangospot Web App..."
 # Sync Web App
 if [ -d "/var/www/html/mangospot" ]; then
-    sudo rsync -av --delete /var/www/html/mangospot/ "${REPO_ROOT}/mangospot/"
+    sudo rsync -av --delete --exclude '.git' /var/www/html/mangospot/ "${REPO_ROOT}/mangospot/"
 else
     echo "Warning: /var/www/html/mangospot not found!"
 fi

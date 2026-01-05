@@ -1,0 +1,160 @@
+function q(key) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(key);
+}
+function fmtBytes(n) {
+  if (n === 0) return '0 B';
+  if (!n || isNaN(n)) return '-';
+  var s = ['B','KB','MB','GB','TB'], e = Math.floor(Math.log(n)/Math.log(1024));
+  return (n/Math.pow(1024,e)).toFixed(2) + ' ' + s[e];
+}
+function loadOverview(u) {
+  $.ajax({
+    url: "./api/users",
+    headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+    method: "GET",
+    dataType: "JSON",
+    data: { "user": u },
+    beforeSend: function(){ $('#page-username').text(u); },
+    success: function(res){
+      if(!res.status){ return; }
+      var d = res.data;
+      $('#ov_username').text(d.username || '');
+      $('#ov_password').text(d.password || '');
+      $('#ov_parent').text(d.parent || '');
+      $('#ov_profile').text(d.profile || '');
+      $('#ov_expiration').text(d.expiration || '');
+      $('#ov_status').text(d.status || '');
+      $('#ov_last_login').text(d.last_login || '');
+      $('#ov_rem_dl').text(fmtBytes(d.remaining_download));
+      $('#ov_rem_ul').text(fmtBytes(d.remaining_upload));
+      $('#ov_rem_traffic').text(d.remaining_traffic);
+      $('#ov_rem_uptime').text(d.remaining_uptime || '');
+      $('#ov_name').text((d.firstname||'') + (d.lastname ? (' ' + d.lastname) : ''));
+      $('#ov_phone').text(d.phone || '');
+      $('#ov_email').text(d.email || '');
+      if(d.sessions && d.sessions.length){
+        var html = '<table class="table table-striped"><thead><tr><th>Start</th><th>Stop</th><th>IP</th><th>MAC</th><th>DL</th><th>UL</th><th>Time</th></tr></thead><tbody>';
+        $.each(d.sessions, function(i,s){
+          html += '<tr><td>'+ (s.acctstarttime || '') +'</td><td>'+ (s.acctstoptime || '') +'</td><td>'+ (s.framedipaddress || '') +'</td><td>'+ (s.callingstationid || '') +'</td><td>'+ fmtBytes(parseInt(s.acctoutputoctets||0)) +'</td><td>'+ fmtBytes(parseInt(s.acctinputoctets||0)) +'</td><td>'+ (s.acctsessiontime || '') +'</td></tr>';
+        });
+        html += '</tbody></table>';
+        $('#sessions-content').html(html);
+      }
+      $('input[name=firstname]').val(d.firstname||'');
+      $('input[name=lastname]').val(d.lastname||'');
+      $('input[name=phone]').val(d.phone||'');
+      $('input[name=email]').val(d.email||'');
+    }
+  });
+}
+function bindActions(u){
+  $('#btn-disconnect').click(function(){
+    swal({title:'Disconnect?', text:'Disconnect this user from hotspot?', type:'warning', showCancelButton:true, confirmButtonText:'Yes, disconnect', closeOnConfirm:false}, function(isConfirm){ if(!isConfirm) return;
+    $.ajax({
+      url: "./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method: "POST",
+      dataType: "JSON",
+      data: { action: 'disconnect', username: u },
+      success: function(r){ swal({title:"Disconnect", text:r.data || r.message, type: r.status?'success':'error', timer: 2000}); loadOverview(u); }
+    });
+    });
+  });
+  $('#btn-reset-traffic').click(function(){
+    swal({title:'Reset Traffic?', text:'Reset traffic counters for this user?', type:'warning', showCancelButton:true, confirmButtonText:'Yes, reset', closeOnConfirm:false}, function(isConfirm){ if(!isConfirm) return;
+    $.ajax({
+      url: "./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method: "POST",
+      dataType: "JSON",
+      data: { action: 'reset_traffic', username: u },
+      success: function(r){ swal({title:"Reset Traffic", text:r.data || r.message, type: r.status?'success':'error', timer: 2000}); loadOverview(u); }
+    });
+    });
+  });
+  $('#btn-delete').click(function(){
+    swal({title:'Are you sure!', text:'Delete permanent this user?', type:'warning', showCancelButton:true, confirmButtonText:'Yes, delete it!', cancelButtonText:'Cancel', showLoaderOnConfirm:true, closeOnConfirm:false, closeOnCancel:true}, function(isConfirm){ if(!isConfirm) return; 
+    $.ajax({
+      url: "./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method: "POST",
+      dataType: "JSON",
+      data: { action: 'delete', username: u },
+      success: function(r){ 
+          swal({title:"Delete", text:r.data || r.message, type: r.status?'success':'error', timer: 2000}); 
+          if(r.status) { setTimeout(function(){ window.location.href = './?users'; }, 2000); }
+      }
+    });
+    });
+  });
+  $('#btn-activate').click(function(){
+    $.ajax({
+      url: "./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method: "POST",
+      dataType: "JSON",
+      data: { action: 'activate', username: u },
+      success: function(r){ swal({title:"Activate", text:r.data || r.message, type: r.status?'success':'error', timer: 2000}); loadOverview(u); }
+    });
+  });
+  $('#btn-disable').click(function(){
+    swal({title:'Disable?', text:'Disable this user?', type:'warning', showCancelButton:true, confirmButtonText:'Yes, disable', closeOnConfirm:false}, function(isConfirm){ if(!isConfirm) return;
+    $.ajax({
+      url: "./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method: "POST",
+      dataType: "JSON",
+      data: { action: 'disable', username: u },
+      success: function(r){ swal({title:"Disable", text:r.data || r.message, type: r.status?'success':'error', timer: 2000}); loadOverview(u); }
+    });
+    });
+  });
+  $('#form-edit').submit(function(e){
+    e.preventDefault();
+    var fd = $(this).serializeArray();
+    fd.push({name:'username', value: u});
+    $.ajax({
+      url:"./api/users",
+      headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+      method:"POST",
+      dataType:"JSON",
+      data: fd.concat([{name:'action', value:'update_info'}]),
+      success:function(r){ swal({title:"Update", text:r.data || r.message, type: r.status?'success':'error', timer:2000}); loadOverview(u); }
+    });
+  });
+  $('#btn-change-name').click(function(){
+    swal({
+      title: "Change Username",
+      text: "Enter new username",
+      type: "input",
+      showCancelButton: true,
+      closeOnConfirm: false
+    }, function(newU){
+      if(newU === false) return false;
+      if(newU === "") { swal.showInputError("You need to write something!"); return false; }
+      $.ajax({
+        url:"./api/users",
+        headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+        method:"POST",
+        dataType:"JSON",
+        data:{ action:'change_name', username:u, new_username:newU },
+        success:function(r){ 
+            if(r.status){ 
+                swal({title:"Name Changed", text:r.message, type: 'success', timer:2000}); 
+                setTimeout(function(){ window.location.search='?username='+encodeURIComponent(newU); }, 2000);
+            } else {
+                swal({title:"Error", text:r.message, type: 'error'});
+            }
+        }
+      });
+    });
+  });
+}
+(function(){
+  'use strict';
+  var u = q('username');
+  if(!u){ swal({title:'No username', text:'Missing username parameter', type:'error'}); return; }
+  loadOverview(u);
+  bindActions(u);
+})();

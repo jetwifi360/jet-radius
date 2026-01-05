@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>User Detail</title>
+  <link rel="stylesheet" type="text/css" href="dist/css/style.css">
+  <link rel="shortcut icon" href="favicon.ico">
+</head>
+<body>
+  <div class="preloader-it"><div class="loader-pendulums"></div></div>
+  <div class="hk-wrapper hk-vertical-nav">
+    <nav class="navbar navbar-expand-xl navbar-light fixed-top hk-navbar">
+      <a id="navbar_toggle_btn" class="navbar-toggle-btn nav-link-hover" href="javascript:void(0);"><span class="feather-icon"><i data-feather="menu"></i></span></a>
+      <a class="navbar-brand" href="./"><img class="brand-img d-inline-block" src="dist/img/logo-light.png" alt="brand" height="40" /></a>
+      <ul class="navbar-nav hk-navbar-content">
+        <li class="nav-item dropdown dropdown-authentication">
+          <a class="nav-link dropdown-toggle no-caret" href="#" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <div class="media">
+              <div class="media-img-wrap"><div class="avatar"><img src="dist/img/users/no_foto.jpg" alt="user" class="avatar-img rounded-circle user-image"></div></div>
+              <div class="media-body"><span><span class="user_users"></span> <i class="zmdi zmdi-chevron-down"></i></span></div>
+            </div>
+          </a>
+          <div class="dropdown-menu dropdown-menu-right" data-dropdown-in="flipInX" data-dropdown-out="flipOutX">
+            <a class="dropdown-item" href="profile.html"><i class="dropdown-icon zmdi zmdi-account"></i><span>Profile</span></a>
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item logout" href="javascript:void(0);"><i class="dropdown-icon zmdi zmdi-power"></i><span>Logout</span></a>
+          </div>
+        </li>
+      </ul>
+    </nav>
+    <nav class="hk-nav hk-nav-light">
+      <a href="javascript:void(0);" id="hk_nav_close" class="hk-nav-close"><span class="feather-icon"><i data-feather="x"></i></span></a>
+      <div class="nicescroll-bar"><div class="navbar-nav-wrap"><div id="list-menu"></div></div></div>
+    </nav>
+    <div id="hk_nav_backdrop" class="hk-nav-backdrop"></div>
+    <div class="hk-pg-wrapper">
+      <nav class="hk-breadcrumb" aria-label="breadcrumb">
+        <ol class="breadcrumb breadcrumb-light bg-transparent">
+          <li class="breadcrumb-item"><a href="#">Radius</a></li>
+          <li class="breadcrumb-item active" aria-current="page">User Detail</li>
+        </ol>
+      </nav>
+      <div class="container">
+        <div class="hk-pg-header">
+          <h4 class="hk-pg-title">
+            <span class="pg-title-icon"><span class="feather-icon"><i data-feather="user"></i></span></span>
+            <span id="page-username"></span>
+          </h4>
+        </div>
+        <div class="row">
+          <div class="col-xl-12">
+            <div class="card">
+              <div class="card-header">
+                <ul class="nav nav-tabs" role="tablist">
+                  <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#overview" role="tab">Overview</a></li>
+                  <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#edit" role="tab">Edit</a></li>
+                  <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#sessions" role="tab">Sessions</a></li>
+                </ul>
+              </div>
+              <div class="card-body">
+                <div class="tab-content">
+                  <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                    <div class="row mb-3">
+                      <div class="col-md-6">
+                        <div class="media">
+                          <div class="media-img-wrap mr-3"><div class="avatar"><img src="dist/img/users/no_foto.jpg" class="avatar-img rounded-circle"></div></div>
+                          <div class="media-body">
+                            <h5 id="ov_name" class="mb-1"></h5>
+                            <div id="ov_phone"></div>
+                            <div id="ov_email"></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-6 text-right">
+                        <div class="btn-group">
+                          <button class="btn btn-success btn-sm" id="btn-activate">Activate</button>
+                          <button class="btn btn-warning btn-sm" id="btn-disable">Disable</button>
+                          <button class="btn btn-info btn-sm" id="btn-change-name">Name changed</button>
+                          <button class="btn btn-secondary btn-sm" id="btn-reset-traffic">Reset Traffic</button>
+                          <button class="btn btn-orange btn-sm" id="btn-disconnect">Disconnect</button>
+                          <button class="btn btn-danger btn-sm" id="btn-delete">Delete</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-6">
+                        <table class="table table-striped">
+                          <tbody>
+                            <tr><th>Username</th><td id="ov_username"></td></tr>
+                            <tr><th>Password</th><td id="ov_password"></td></tr>
+                            <tr><th>Parent</th><td id="ov_parent"></td></tr>
+                            <tr><th>Profile</th><td id="ov_profile"></td></tr>
+                            <tr><th>Expiration</th><td id="ov_expiration"></td></tr>
+                            <tr><th>Status</th><td id="ov_status"></td></tr>
+                            <tr><th>Last Login</th><td id="ov_last_login"></td></tr>
+                            <tr><th>Remaining Download</th><td id="ov_rem_dl"></td></tr>
+                            <tr><th>Remaining Upload</th><td id="ov_rem_ul"></td></tr>
+                            <tr><th>Remaining Traffic</th><td id="ov_rem_traffic"></td></tr>
+                            <tr><th>Remaining Uptime</th><td id="ov_rem_uptime"></td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="col-md-6">
+                        <div id="session-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="tab-pane fade" id="edit" role="tabpanel">
+                    <form id="form-edit">
+                      <div class="row">
+                        <div class="form-group col-md-6">
+                          <label>First Name</label>
+                          <input type="text" class="form-control" name="firstname" />
+                        </div>
+                        <div class="form-group col-md-6">
+                          <label>Last Name</label>
+                          <input type="text" class="form-control" name="lastname" />
+                        </div>
+                        <div class="form-group col-md-6">
+                          <label>Phone</label>
+                          <input type="text" class="form-control" name="phone" />
+                        </div>
+                        <div class="form-group col-md-6">
+                          <label>Email</label>
+                          <input type="email" class="form-control" name="email" />
+                        </div>
+                      </div>
+                      <button type="submit" class="btn btn-blue">Save</button>
+                    </form>
+                  </div>
+                  <div class="tab-pane fade" id="sessions" role="tabpanel">
+                    <div id="sessions-content"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hk-footer-wrap container" data-include="menu/footer.html"></div>
+    </div>
+  </div>
+  <script src="vendors/jquery/dist/jquery.min.js"></script>
+  <script src="vendors/popper.js/dist/umd/popper.min.js"></script>
+  <script src="vendors/bootstrap/dist/js/bootstrap.min.js"></script>
+  <script src="vendors/jquery-cookie/jquery.cookie.js"></script>
+  <script src="vendors/sweetalert/sweetalert.min.js"></script>
+  <script src="vendors/moment/moment.js"></script>
+  <script src="dist/js/feather.min.js"></script>
+  <script src="dist/js/controls.js"></script>
+  <script src="dist/js/init.js"></script>
+  <script src="dist/js/user.js"></script>
+</body>
+</html>

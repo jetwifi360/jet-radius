@@ -1,0 +1,540 @@
+function Select() {
+    $.ajax({
+        url: "./api/index.php?pages=voucher",
+        headers: {
+            "Api": $.cookie("BSK_API"),
+            "Key": $.cookie("BSK_KEY"),
+            "Accept": "application/json"
+        },
+        method: "GET",
+        dataType: "JSON",
+        data: "profiles",
+        success: function (response) {
+            if(response && response.status && Array.isArray(response.data)) {
+                var select = $('select.profiles');
+                select.empty();
+                $.each(response.data, function (i, p) {
+                    var id = p.id || p.groupname || p.name;
+                    var name = p.name || p.groupname || p.id;
+                    if(id) select.append('<option value="' + id + '">' + name + '</option>');
+                });
+            } else {
+                $('select.profiles').empty();
+            }
+        }
+    });
+    $.ajax({
+        url: "./api/index.php?pages=voucher",
+        headers: {
+            "Api": $.cookie("BSK_API"),
+            "Key": $.cookie("BSK_KEY"),
+            "Accept": "application/json"
+        },
+        method: "GET",
+        dataType: "JSON",
+        data: "theme",
+        success: function (themes) {
+            $('select#theme').empty();
+            var items = (themes && themes.data && Array.isArray(themes.data)) ? themes.data : (Array.isArray(themes) ? themes : []);
+            $.each(items, function (e, theme) {
+                var type = theme.type || 'html';
+                var label = (type === 'designer' ? 'Designer: ' + theme.name : theme.name);
+                var value = (type === 'designer' ? 'designer_' + theme.id : 'theme_' + theme.id);
+                $('select#theme').append('<option value="' + value + '">' + label + '</option>');
+            });
+        },
+        error: function() {
+            $('select#theme').empty();
+        }
+    });
+};
+
+function Tables() {
+    var Table = $('#tables').DataTable({
+        "responsive": true,
+        "processing": true,
+        "serverSide": true,
+        "ajax": {
+            url: "./api/index.php?pages=voucher&data",
+            headers: {
+                "Api": $.cookie("BSK_API"),
+                "Key": $.cookie("BSK_KEY"),
+                "Accept": "application/json"
+            },
+            method: "POST"
+        },
+        "columns": [{
+                "data": "id",
+                "orderable": false,
+                "className": 'text-center',
+                render: function (data, type, row) {
+                    return '<input type="checkbox" name="remove[]" value="' + row.id + '">';
+                }
+            }, {
+                "data": "batch_name",
+                render: function (data, type, row) {
+                    return '<a href="#" class="text-info view-details" data-id="' + row.id + '">' + row.batch_name + '</a>';
+                }
+            },
+            {
+                "data": "profile"
+            },
+            {
+                "data": "unit_price"
+            },
+            {
+                "data": "quantity"
+            },
+            {
+                "data": "created_at"
+            },
+            {
+                "data": "id",
+                "className": 'dt-body-right',
+                render: function (data, type, row) {
+                    return '<a class="btn btn-warning btn-sm" href="#" data-toggle="modal" data-target="#print" onclick="$(\'#data\').val(\'' + row.id + '\'); Prints(\'' + row.id + '\');"><i class="fa fa-print"></i></a>';
+                }
+            }
+        ],
+        "order": [
+            [5, 'desc']
+        ],
+        "iDisplayLength": 10
+    });
+    
+    // Details Click
+    $('body').off('click', '.view-details').on('click', '.view-details', function(e){
+        e.preventDefault();
+        var id = $(this).data('id');
+        $.ajax({
+            url: "./api/index.php?pages=voucher",
+            headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY")},
+            method: "GET",
+            dataType: "JSON",
+            data: {detail: id},
+            success: function(res){
+                var tbody = $('#details-table tbody');
+                tbody.empty();
+                if(res.status && res.data){
+                    $.each(res.data, function(i, row){
+                        tbody.append('<tr><td>'+row.username+'</td><td>'+row.password+'</td><td>'+row.serial_number+'</td></tr>');
+                    });
+                    $('#details-modal').modal('show');
+                } else {
+                    swal("Info", "No cards found for this batch.", "info");
+                }
+            },
+            error: function() {
+                swal("Error", "Failed to load details.", "error");
+            }
+        });
+    });
+};
+
+function Prints(data, theme) {
+    // Check if this is a designer template (starts with "designer_")
+    if(theme && theme.startsWith('designer_')) {
+        var templateId = theme.substring(9); // Remove "designer_" prefix
+        loadDesignerTemplateForPrint(data, templateId);
+        return;
+    }
+    
+    // Handle regular themes (starts with "theme_" or legacy themes)
+    var themeId = theme;
+    if(theme && theme.startsWith('theme_')) {
+        themeId = theme.substring(6); // Remove "theme_" prefix
+    }
+    
+    $.ajax({
+        url: "./api/index.php?pages=voucher",
+        headers: {
+            "Api": $.cookie("BSK_API"),
+            "Key": $.cookie("BSK_KEY"),
+            "Accept": "application/json"
+        },
+        method: "GET",
+        dataType: "JSON",
+        data: {
+            "print": data,
+            "themes": themeId
+        },
+        beforeSend: function () {
+            $('#print-content').empty().html('<div class="text-center"><img src="./dist/img/loader.gif"></div>');
+        },
+        success: function (prints) {
+            if(prints.status && prints.print) {
+                window.__printItems = prints.print;
+                var cols = parseInt($('#cards-per-row').val()) || 3;
+                applyGridStyles(cols);
+                var grid = buildGrid(window.__printItems, cols);
+                $('#print-content').html(grid).find('.qr-code').each(function () {
+                    $(this).qrcode({ render: "image", size: 75, text: $(this).data('code') });
+                });
+                fitCards();
+            } else {
+                $('#print-content').html('<div class="alert alert-danger">Failed to load print data</div>');
+            }
+        }
+    });
+}
+
+function Action() {
+    // Generate Batch
+    $('#form-batch').off('submit').on('submit', function(e){
+        e.preventDefault();
+        var form = $(this);
+        var btn = form.find('button[type="submit"]');
+        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Generating...');
+        
+        $.ajax({
+            url: "./api/voucher",
+            headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY")},
+            method: "POST",
+            dataType: "JSON",
+            data: form.serialize(),
+            success: function(res){
+                btn.prop('disabled', false).html('<i class="fa fa-magic"></i> Generate');
+                if(res.status){
+                    swal("Success", res.data, "success");
+                    $('#add-batch').modal('hide');
+                    $('#tables').DataTable().ajax.reload();
+                } else {
+                    swal("Error", res.data || "Unknown error", "error");
+                }
+            },
+            error: function(xhr, status, error) {
+                btn.prop('disabled', false).html('<i class="fa fa-magic"></i> Generate');
+                swal("Error", "Request failed: " + error, "error");
+            }
+        });
+    });
+
+    // Import Batch
+    $('#form-import').off('submit').on('submit', function(e){
+        e.preventDefault();
+        var form = $(this);
+        var btn = form.find('button[type="submit"]');
+        var formData = new FormData(this);
+        
+        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Importing...');
+        
+        $.ajax({
+            url: "./api/voucher",
+            headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY")},
+            method: "POST",
+            dataType: "JSON",
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function(res){
+                btn.prop('disabled', false).html('<i class="fa fa-upload"></i> Import');
+                if(res.status){
+                    swal("Success", res.data, "success");
+                    $('#import-batch').modal('hide');
+                    $('#tables').DataTable().ajax.reload();
+                    form[0].reset();
+                } else {
+                    swal("Error", res.data || "Unknown error", "error");
+                }
+            },
+            error: function(xhr, status, error) {
+                btn.prop('disabled', false).html('<i class="fa fa-upload"></i> Import');
+                swal("Error", "Import failed: " + error, "error");
+            }
+        });
+    });
+
+    // Bulk Actions
+    $('.action-btn').off('click').on('click', function(e){
+        e.preventDefault();
+        var action = $(this).data('action');
+        var ids = [];
+        $('input[name="remove[]"]:checked').each(function(){
+            ids.push($(this).val());
+        });
+        
+        if(ids.length === 0){
+            swal("Warning", "Please select at least one batch", "warning");
+            return;
+        }
+        
+        if(action === 'print'){
+            $('#data').val(ids.join(','));
+            $('#print').modal('show');
+            Prints(ids.join(','), $('#theme').val());
+            return;
+        }
+        
+        if(action === 'export'){
+            var btn = $('.action-btn[data-action="export"]');
+            var originalText = btn.html();
+            btn.html('<i class="fa fa-spinner fa-spin"></i> Exporting...');
+            
+            // Use AJAX with Blob to support Headers
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', './api/voucher', true);
+            xhr.responseType = 'blob';
+            xhr.setRequestHeader("Api", $.cookie("BSK_API"));
+            xhr.setRequestHeader("Key", $.cookie("BSK_KEY"));
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            
+            xhr.onload = function () {
+                btn.html(originalText);
+                if (this.status === 200) {
+                    var blob = new Blob([this.response], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    var link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = "vouchers_export.xlsx";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else {
+                    swal("Error", "Export failed.", "error");
+                }
+            };
+            
+            xhr.onerror = function() {
+                 btn.html(originalText);
+                 swal("Error", "Network error during export.", "error");
+            };
+            
+            xhr.send('export_batch=1&ids=' + encodeURIComponent(ids.join(',')));
+            return;
+        }
+        
+        swal({
+            title: "Are you sure?",
+            text: "Perform " + action + " on selected batches?",
+            type: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Yes, do it!",
+            closeOnConfirm: false
+        }, function(){
+            var data = {action: action, ids: ids};
+            if(action === 'delete') data = {delete_batch: 1, ids: ids};
+            
+            $.ajax({
+                url: "./api/voucher",
+                headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY")},
+                method: "POST",
+                dataType: "JSON",
+                data: data,
+                success: function(res){
+                    swal("Success", res.data, "success");
+                    $('#tables').DataTable().ajax.reload();
+                    $('#CheckAll').prop('checked', false);
+                },
+                error: function(xhr, status, error) {
+                    swal("Error", "Action failed: " + error, "error");
+                }
+            });
+        });
+    });
+
+    // CheckAll
+    $('#CheckAll').click(function (e) {
+        var table = $(e.target).closest('table');
+        $('td input:checkbox', table).prop('checked', this.checked);
+    });
+    
+    // Theme Change
+    $('select#theme').change(function () {
+        Prints($('#data').val(), $(this).val());
+    });
+    $('#cards-per-row').change(function () {
+        var cols = parseInt($(this).val()) || 3;
+        if (Array.isArray(window.__printItems) && window.__printItems.length) {
+            applyGridStyles(cols);
+            var grid = buildGrid(window.__printItems, cols);
+            $('#print-content').html(grid).find('.qr-code').each(function () {
+                $(this).qrcode({ render: "image", size: 75, text: $(this).data('code') });
+            });
+            fitCards();
+        }
+    });
+    
+    // Print Button
+    $('body').off('click', '.print').on('click', '.print', function () {
+        var divToPrint = document.getElementById('print-content');
+        var stylesEl = document.getElementById('print-grid-styles');
+        var styles = (stylesEl ? stylesEl.textContent : '') + '\n*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}\nhtml,body{background:#fff !important;}';
+        var baseHref = location.origin + location.pathname.replace(/[^\/]+$/, '');
+        var html = divToPrint.innerHTML
+            .replace(/url\((['"])\.\/(.*?)\1\)/g, function(_, quote, path){ return 'url(' + quote + baseHref + path + quote + ')'; });
+        var newWin = window.open('', 'Print-Window');
+        newWin.document.open();
+        newWin.document.write('<html><head><base href="' + baseHref + '"><link rel="stylesheet" href="./dist/css/style.css"><style>' + styles + '</style></head><body onload="window.print()">' + html + '</body></html>');
+        newWin.document.close();
+        setTimeout(function () {
+            newWin.close();
+        }, 10);
+    });
+};
+
+function loadDesignerTemplates() {}
+
+function loadDesignerTemplateForPrint(batchData, templateId) {
+    // Use the same API endpoint as regular themes, but with designer template ID
+    $.ajax({
+        url: "./api/voucher",
+        headers: {
+            "Api": $.cookie("BSK_API"),
+            "Key": $.cookie("BSK_KEY"),
+            "Accept": "application/json"
+        },
+        method: "GET",
+        dataType: "JSON",
+        data: {
+            "print": batchData,
+            "themes": templateId
+        },
+        beforeSend: function () {
+            $('#print-content').empty().html('<div class="text-center"><img src="./dist/img/loader.gif"></div>');
+        },
+        success: function (response) {
+            if(response.status && response.print) {
+                window.__printItems = response.print;
+                var cols = parseInt($('#cards-per-row').val()) || 3;
+                applyGridStyles(cols);
+                var grid = buildGrid(window.__printItems, cols);
+                $('#print-content').html(grid).find('.qr-code').each(function () {
+                    $(this).qrcode({ render: "image", size: 75, text: $(this).data('code') });
+                });
+                fitCards();
+                // ensure designer background applied if missing in generated HTML
+                applyDesignerBackground(templateId);
+            } else {
+                $('#print-content').html('<div class="alert alert-danger">Failed to load designer template data</div>');
+            }
+        },
+        error: function() {
+            $('#print-content').html('<div class="alert alert-danger">Failed to load designer template</div>');
+        }
+    });
+}
+
+function renderDesignerTemplate(template, batchData) {
+    var html = '<div class="designer-template">';
+    html += '<h3>' + (template.name || 'Untitled') + '</h3>';
+    html += '</div>';
+    $('#print-content').html(html);
+}
+
+function applyDesignerBackground(templateId){
+    $.ajax({
+        url: "./api/designer.php",
+        headers: {"Api": $.cookie("BSK_API"), "Key": $.cookie("BSK_KEY"), "Accept": "application/json"},
+        method: "GET",
+        dataType: "JSON",
+        data: {detail: templateId},
+        success: function(res){
+            if(res && res.status && res.data){
+                var bg = res.data.background || '';
+                if(!bg && res.data.layout){
+                    try {
+                        var layout = typeof res.data.layout === 'string' ? JSON.parse(res.data.layout) : res.data.layout;
+                        if(Array.isArray(layout)){
+                            for(var i=0;i<layout.length;i++){
+                                var li = layout[i];
+                                if(li && li.type === 'image' && li.isBg && li.src){
+                                    bg = li.src;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+                if(bg){
+                    var baseHref = location.origin + location.pathname.replace(/[^\/]+$/, '');
+                    if(bg.indexOf('http') !== 0 && bg.indexOf('data:') !== 0){
+                        if(bg.indexOf('./') === 0) bg = bg.substring(2);
+                        else if(bg.indexOf('/') === 0) bg = bg.substring(1);
+                        bg = baseHref + bg;
+                    }
+                    if(bg.indexOf('?') === -1 && bg.indexOf('data:') !== 0) bg += '?v=' + Date.now();
+                    var $cards = $('#print-content .voucher-card');
+                    $cards.css('background', 'url(' + bg + ') no-repeat center/contain');
+                    $cards.each(function(){
+                        var $c = $(this);
+                        var hasImg = $c.find('img.bg-img').length > 0;
+                        if(!hasImg){
+                            var img = $('<img class="bg-img" alt=""/>');
+                            img.attr('src', bg);
+                            img.css({position:'absolute',left:0,top:0,width:'100%',height:'100%',objectFit:'contain',zIndex:0});
+                            $c.prepend(img);
+                        }
+                    });
+                }
+            }
+        }
+    });
+}
+
+function buildGrid(items, cols) {
+    cols = parseInt(cols) || 3;
+    var html = '<div class="print-sheet"><div class="sheet-grid" data-cols="' + cols + '">';
+    for (var i = 0; i < items.length; i++) {
+        var cell = items[i];
+        var baseHref = location.origin + location.pathname.replace(/[^\/]+$/, '');
+        cell = cell.replace(/url\((['"]?)(?!https?:|data:)([^'"\)]+)\1\)/g, function(_, quote, path){
+            var p = path;
+            if(p.indexOf('./') === 0){ p = p.substring(2); }
+            else if(p.indexOf('/') === 0){ p = p.substring(1); }
+            var abs = baseHref + p;
+            if(abs.indexOf('?') === -1){ abs += '?v=' + Date.now(); }
+            return 'url(' + (quote || '') + abs + (quote || '') + ')';
+        });
+        html += '<div class="card-cell">' + cell + '</div>';
+    }
+    html += '</div></div>';
+    return html;
+}
+
+function applyGridStyles(cols){
+    cols = parseInt(cols) || 3;
+    var style = '\n@page{size:A4;margin:0;}\nhtml,body{background:#fff !important;margin:0 !important;}\n.print-sheet{width:210mm;min-height:297mm;margin:0 auto;padding:8mm;box-sizing:border-box;background:#fff !important;}\n.sheet-grid{display:grid;grid-gap:2mm;grid-template-columns:repeat(' + cols + ',1fr);}\n.card-cell{width:100%;position:relative;overflow:hidden;border:0;background:transparent;padding:0;margin:0;}\n.card-cell .voucher-card{position:absolute;left:0;top:0;transform-origin:top left;}\n';
+    var tag = document.getElementById('print-grid-styles');
+    if(!tag){
+        tag = document.createElement('style');
+        tag.id = 'print-grid-styles';
+        document.head.appendChild(tag);
+    }
+    tag.textContent = style;
+}
+
+function fitCards(){
+    var cells = document.querySelectorAll('#print-content .card-cell');
+    cells.forEach(function(cell){
+        var card = cell.querySelector('.voucher-card');
+        if(!card) return;
+        var cw = cell.clientWidth;
+        var w = parseInt(card.getAttribute('data-w')) || card.offsetWidth || cw;
+        var h = parseInt(card.getAttribute('data-h')) || card.offsetHeight || cw;
+        if(w && h){
+            var s = cw / w * 1.05;
+            var sh = h * s;
+            cell.style.height = sh + 'px';
+            card.style.width = w + 'px';
+            card.style.height = h + 'px';
+            card.style.transform = 'scale(' + s + ')';
+            card.style.left = '0px';
+            card.style.top = '0px';
+            // ensure background images load in print window if relative
+            var bg = card.style.backgroundImage || '';
+            if(bg && bg.indexOf('./') >= 0){
+                var baseHref = location.origin + location.pathname.replace(/[^\/]+$/, '');
+                card.style.backgroundImage = bg.replace(/url\((['"])\.\/(.*?)\1\)/g, function(_, quote, path){ return 'url(' + quote + baseHref + path + quote + ')'; });
+            }
+            // force text color rendering in print
+            card.style.webkitPrintColorAdjust = 'exact';
+            card.style.printColorAdjust = 'exact';
+        }
+    });
+}
+
+(function () {
+    'use strict';
+    Select();
+    Tables();
+    Action();
+})();

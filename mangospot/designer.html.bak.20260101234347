@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voucher Designer</title>
+  <link rel="stylesheet" href="dist/css/style.css" />
+</head>
+<body>
+  <div class="container mt-20">
+    <div class="row">
+      <div class="col-md-3">
+        <div class="card">
+          <div class="card-header">Properties</div>
+          <div class="card-body">
+            <input type="hidden" id="tpl-id" />
+            <div class="form-group">
+              <label>Template Name</label>
+              <input type="text" id="tpl-name" class="form-control" placeholder="My Template" />
+            </div>
+            <div class="form-group">
+              <label>Background</label>
+              <input type="file" id="bg-file" class="form-control" accept="image/*" />
+            </div>
+            <div class="form-group">
+              <label>Templates</label>
+              <select id="tpl-list" class="form-control"></select>
+            </div>
+            <button class="btn btn-success" id="save-tpl"><i class="fa fa-save"></i> Save</button>
+          </div>
+        </div>
+        <div class="card mt-20">
+          <div class="card-header">Tools</div>
+          <div class="card-body">
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[username]">Username</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[password]">Password</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[serial_number]">Serial</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[profile]">Profile</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[price]">Price</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[data]">Data</button>
+            <button type="button" class="btn btn-outline-primary btn-block tool-add" data-placeholder="[qr_code]">QR Code</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-9">
+        <div class="card">
+          <div class="card-header">Card Designer</div>
+          <div class="card-body">
+            <canvas id="designer-canvas" width="600" height="350" style="border:1px solid #ccc"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="vendors/jquery/dist/jquery.min.js"></script>
+  <script src="vendors/jquery-cookie/jquery.cookie.js"></script>
+  <script src="vendors/jquery-toast/jquery.toast.js"></script>
+  <script src="dist/js/controls.js"></script>
+  <script src="dist/js/init.js"></script>
+  <script src="dist/js/designer.js"></script>
+</body>
+</html>

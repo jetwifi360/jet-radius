@@ -1,0 +1,646 @@
+<?php
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+
+// Create card_batches table
+$Bsk->exec("CREATE TABLE IF NOT EXISTS card_batches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    batch_name VARCHAR(50),
+    profile VARCHAR(64),
+    unit_price DECIMAL(10,2),
+    quantity INT,
+    created_by VARCHAR(50),
+    expiration_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)");
+
+// Create userinfo table
+$Bsk->exec("CREATE TABLE IF NOT EXISTS userinfo (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64),
+    creationby VARCHAR(50),
+    creationdate DATETIME,
+    batch_id INT,
+    serial_number VARCHAR(50),
+    unit_price DECIMAL(10,2),
+    firstname VARCHAR(50),
+    lastname VARCHAR(50)
+)");
+
+// Ensure designer templates table exists for theme listing and rendering
+$Bsk->exec("CREATE TABLE IF NOT EXISTS voucher_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    identity INT,
+    users INT,
+    name VARCHAR(255),
+    background VARCHAR(255),
+    width INT,
+    height INT,
+    layout LONGTEXT,
+    status VARCHAR(10),
+    created DATETIME
+)");
+
+$radius = (isset($Menu['data']) && $Menu['data'] ? " and a.users = '$Menu[id]'" : "");
+
+// Resolve identity/users even if $Menu is not available
+$identity_id = isset($Menu['identity']) ? $Menu['identity'] : (isset($Users['identity']) ? $Users['identity'] : (isset($Identity['id']) ? $Identity['id'] : 0));
+$user_id = isset($Menu['id']) ? $Menu['id'] : (isset($Users['id']) ? $Users['id'] : 0);
+
+// LIST BATCHES
+if(isset($_GET['data'])){
+    // Using card_batches table
+    $tables = $Bsk->Table(
+        "card_batches a", 
+        "a.id, a.batch_name, a.profile, a.unit_price, a.quantity, a.created_at", 
+        "1=1", // Filter by user if needed? current schema has created_by
+        array("a.id", "a.batch_name", "a.profile", "a.unit_price", "a.created_at", "a.id")
+    );
+    echo json_encode($tables, true);
+}
+
+// GET BATCH DETAILS (Users in a batch)
+if(isset($_GET['detail'])){
+    $batch_id = Rahmad($_GET['detail']);
+    // Assuming userinfo links to batch_id
+    $show_detail = $Bsk->Select(
+        "userinfo a left join radcheck b on a.username = b.username and b.attribute = 'Cleartext-Password'", 
+        "a.username, b.value as password, a.serial_number", 
+        "a.batch_id = '$batch_id'", 
+        "a.id asc"
+    );
+    // Format for DataTable or List
+    $data = array();
+    foreach($show_detail as $row) {
+        $data[] = $row;
+    }
+    echo json_encode(array("status" => true, "data" => $data), true);
+}
+
+if(isset($_GET['packet'])){
+    $checks = (empty($_GET['packet']) ? "" : " and a.groupname = '".$_GET['packet']."'");
+    $packet = $Bsk->Show(
+        "radgroupcheck a left join radgroupreply b on a.groupname = b.groupname", 
+        "a.groupname as id, a.groupname as profile", 
+        "a.identity = '$identity_id' $checks GROUP BY a.groupname", "a.groupname asc"
+    );
+    echo json_encode($packet ? 
+        array("status" => true, "message" => "success", "data" => array_merge($packet, array("voucher" => 500))) : 
+        array("status" => false, "message" => "error", "data" => false), true
+    );
+}
+
+if(isset($_GET['profiles'])){
+    $array_profile = array();
+    $query_profile = $Bsk->Select(
+        "radgroupcheck a left join radgroupreply b on a.groupname = b.groupname", 
+        "a.groupname as id, a.groupname as name, a.groupname", 
+        "a.identity = '$identity_id' GROUP BY a.groupname", "a.groupname asc"
+    );
+    foreach ($query_profile as $show_profile) {
+        $array_profile[] = $show_profile;
+    }
+    echo json_encode($array_profile ? 
+        array("status" => true, "message" => "success", "data" => $array_profile) : 
+        array("status" => false, "message" => "error", "data" => false), true
+    );
+}
+
+if(isset($_GET['theme'])){
+    $themes = array();
+    $query_themes = $Bsk->Select("themes a", "a.id, a.name", "a.identity = '$identity_id' and a.type = 'radius'", "a.id asc");
+    foreach ($query_themes as $value_themes) {
+        $themes[] = array(
+            'id' => $value_themes['id'],
+            'name' => $value_themes['name'],
+            'type' => 'html'
+        );
+    }
+    $query_tpl = $Bsk->Select("voucher_templates", "id, name", "identity='$identity_id' and status='true'", "id desc");
+    foreach ($query_tpl as $tpl) {
+        $themes[] = array(
+            'id' => $tpl['id'],
+            'name' => $tpl['name'],
+            'type' => 'designer'
+        );
+    }
+    echo json_encode($themes ? array("status"=>true, "message"=>"success", "data"=>$themes) : array("status"=>false, "message"=>"error", "data"=>false), true);
+}
+
+// CREATE BATCH
+if(isset($_POST['qty'])){
+    $qty    = Rahmad($_POST['qty']);
+    $mode   = Rahmad($_POST['mode']);
+    $user_len = Rahmad($_POST['username_length']);
+    $pass_len = Rahmad($_POST['password_length']);
+    $pass_len = intval($pass_len);
+    $prefix = Rahmad($_POST['prefix']);
+    $charec = Rahmad($_POST['charecter']);
+    $profil = Rahmad($_POST['groupname']);
+    $desc   = $_POST['description']; // Maybe use as batch note?
+    $nas_ip = isset($_POST['nas_ip']) ? Rahmad($_POST['nas_ip']) : '';
+    if(!$nas_ip){
+        $hp = $Bsk->Show("radgroupreply", "value", "groupname='$profil' AND attribute='Mikrotik-Hotspot-Profile'");
+        if($hp && !empty($hp['value'])){
+            $sv = strtolower($hp['value']);
+            if(strpos($sv, 'caferoom') !== false){
+                $nas_ip = '192.168.5.1';
+            } elseif(strpos($sv, 'hsprof1') !== false){
+                $nas_ip = '10.10.0.1';
+            }
+        }
+        if(!$nas_ip){
+            $p = strtolower($profil);
+            if(strpos($p, 'caferoom') !== false){
+                $nas_ip = '192.168.5.1';
+            } elseif(strpos($p, 'hsprof1') !== false){
+                $nas_ip = '10.10.0.1';
+            }
+        }
+    }
+    
+    // Generate Batch Series Number: Year:Sequence (e.g., 2025:1, 2025:2)
+    $current_year = date('Y');
+    
+    // Find max sequence for current year
+    $last_batch = $Bsk->Show("card_batches", "batch_name", "batch_name LIKE '$current_year:%' ORDER BY id DESC LIMIT 1");
+    
+    if($last_batch && isset($last_batch['batch_name'])){
+        $parts = explode(':', $last_batch['batch_name']);
+        if(count($parts) == 2 && is_numeric($parts[1])){
+            $next_seq = intval($parts[1]) + 1;
+        } else {
+            $next_seq = 1;
+        }
+    } else {
+        $next_seq = 1;
+    }
+    
+    $batch_name = $current_year . ':' . $next_seq;
+    
+    // Get Price
+    // Try radprice first (where profiles.php saves it)
+    $price_res = $Bsk->Show("radprice", "price", "groupname='$profil'");
+    if($price_res){
+        $unit_price = $price_res['price'];
+    } else {
+        // Fallback to radgroupreply if legacy
+        $price_res = $Bsk->Show("radgroupreply", "value", "groupname='$profil' and attribute='Unit-Price'");
+        $unit_price = $price_res ? $price_res['value'] : 0;
+    }
+    
+    // Insert Batch
+    $batch_data = array(
+        "batch_name" => $batch_name,
+        "profile" => $profil,
+        "unit_price" => $unit_price,
+        "quantity" => $qty,
+        "created_by" => ($Menu['username'] ?? ($Users['username'] ?? 'admin')),
+        "expiration_date" => date('Y-m-d', strtotime('+1 year'))
+    );
+    
+    // Custom insert for card_batches since $Bsk->Insert might be strict
+    $Bsk->Insert("card_batches", $batch_data);
+    $batch_info = $Bsk->Show("card_batches", "id", "batch_name='$batch_name'");
+    
+    if(!$batch_info || !isset($batch_info['id'])) {
+        echo json_encode(array("status" => false, "message" => "error", "color" => "red", "data" => "Failed to create batch record."));
+        exit;
+    }
+    
+    $batch_id = $batch_info['id'];
+    
+    $success = 0;
+    $failed = 0;
+    
+    // Begin transaction? Not supported by helper but we can try to be safe.
+    
+    for($i=1; $i<=$qty; $i++){
+        // Serial: Series-Index
+        $serial_number = $batch_name . '-' . str_pad($i, strlen($qty), '0', STR_PAD_LEFT);
+        
+        $batch_user = $prefix.random_str($user_len, $charec);
+        $batch_pswd = ($pass_len > 0 ? random_str($pass_len, $charec) : '');
+        $mode_paswd = ($mode == 'true' ? $batch_pswd : ($mode == 'username_only' ? '' : $batch_user));
+        
+        $post_array = array(
+            "identity"   => $identity_id,
+            "users"      => $user_id,
+            "username"   => $batch_user,
+            "attribute"  => "Cleartext-Password",
+            "op"         => ":=",
+            "value"      => $mode_paswd,
+            "description"=> "Batch: $batch_name",
+            "created"    => date('Y-m-d H:i:s')
+        );
+        
+        // Use try-catch for critical inserts
+        try {
+            $inserted = true;
+            if($pass_len > 0 && $mode !== 'username_only'){
+                $add_voucher = $Bsk->Insert("radcheck", $post_array);
+                $inserted = ($add_voucher ? true : false);
+            }
+            if($mode === 'username_only'){
+                $Bsk->Delete("radcheck", array("username" => $batch_user, "attribute" => "Cleartext-Password"));
+                $Bsk->Insert("radcheck", array(
+                    "identity"   => $identity_id,
+                    "users"      => $user_id,
+                    "username"   => $batch_user,
+                    "attribute"  => "Auth-Type",
+                    "op"         => ":=",
+                    "value"      => "Accept",
+                    "description"=> "Batch: $batch_name",
+                    "created"    => date('Y-m-d H:i:s')
+                ));
+            }
+            if($inserted){
+                $Bsk->Insert("radusergroup",
+                    array(
+                        "identity"  => $identity_id,
+                        "users"     => $user_id,
+                        "username"  => $batch_user,
+                        "groupname" => $profil
+                    )
+                );
+                if($nas_ip){
+                    $Bsk->Delete("radcheck", array("username"=>$batch_user, "attribute"=>"NAS-IP-Address"));
+                    $Bsk->Insert("radcheck", array(
+                        "identity"   => $identity_id,
+                        "users"      => $user_id,
+                        "username"   => $batch_user,
+                        "attribute"  => "NAS-IP-Address",
+                        "op"         => "==",
+                        "value"      => $nas_ip,
+                        "description"=> "Batch: $batch_name",
+                        "created"    => date('Y-m-d H:i:s')
+                    ));
+                }
+                $Bsk->Insert("userinfo", array(
+                    "username" => $batch_user,
+                    "creationby" => ($Menu['username'] ?? ($Users['username'] ?? 'admin')),
+                    "creationdate" => date('Y-m-d H:i:s'),
+                    "batch_id" => $batch_id,
+                    "serial_number" => $serial_number,
+                    "unit_price" => $unit_price,
+                    "firstname" => "Batch $batch_name",
+                    "lastname" => "Serial $serial_number"
+                ));
+                $success++;
+            } else {
+                $failed++;
+            }
+        } catch (Exception $e) {
+            $failed++;
+            // Log error if possible
+        }
+    }
+    
+    echo json_encode($qty ? 
+        array("status" => true, "message" => "success", "color" => "green", "data" => "Generated Batch $batch_name ($success success, $failed failed)") : 
+        array("status" => false, "message" => "error", "color" => "red", "data" => "Generate failed!"), true
+    );
+}
+
+// DELETE BATCH
+if(isset($_POST['delete_batch'])){
+    $ids = $_POST['ids']; // Array of IDs
+    if(!is_array($ids)) $ids = array($ids);
+    
+    foreach($ids as $bid){
+        // Get users in batch
+        $users = $Bsk->Select("userinfo", "username", "batch_id='$bid'");
+        foreach($users as $u){
+            $user = $u['username'];
+            $Bsk->Delete("radcheck", array("username" => $user));
+            $Bsk->Delete("radreply", array("username" => $user));
+            $Bsk->Delete("radusergroup", array("username" => $user));
+            $Bsk->Delete("radacct", array("username" => $user));
+            $Bsk->Delete("userinfo", array("username" => $user));
+        }
+        $Bsk->Delete("card_batches", array("id" => $bid));
+    }
+    
+    echo json_encode(array("status" => true, "message" => "success", "data" => "Deleted successfully"));
+}
+
+// ACTION: SUSPEND / RELEASE
+if(isset($_POST['action'])){
+    $action = $_POST['action'];
+    $ids = $_POST['ids']; // Array of batch IDs
+    
+    if(!is_array($ids)) $ids = array($ids);
+    
+    foreach($ids as $bid){
+        $users = $Bsk->Select("userinfo", "username", "batch_id='$bid'");
+        foreach($users as $u){
+            $user = $u['username'];
+            if($action == 'suspend'){
+                // Add Auth-Type := Reject
+                // Check if exists
+                $chk = $Bsk->Show("radcheck", "id", "username='$user' and attribute='Auth-Type' and value='Reject'");
+                if(!$chk){
+                    $Bsk->Insert("radcheck", array(
+                        "username" => $user,
+                        "attribute" => "Auth-Type",
+                        "op" => ":=",
+                        "value" => "Reject"
+                    ));
+                }
+            } elseif($action == 'release'){
+                // Remove Auth-Type := Reject
+                $Bsk->Delete("radcheck", array("username" => $user, "attribute" => "Auth-Type", "value" => "Reject"));
+            }
+        }
+    }
+    echo json_encode(array("status" => true, "message" => "success", "data" => "Action $action completed"));
+}
+
+// EXPORT EXCEL
+if(isset($_POST['export_batch'])){
+    $ids = $_POST['ids'];
+    if(!is_array($ids)) $ids = explode(',', $ids);
+    
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    
+    // Headers
+    $headers = ['Series', 'SN', 'PIN', 'Username', 'Password', 'Value', 'Expiration', 'Used'];
+    $col = 'A';
+    foreach($headers as $h){
+        $sheet->setCellValue($col.'1', $h);
+        $col++;
+    }
+    
+    $row = 2;
+    foreach($ids as $bid){
+        // Get Batch Info for Expiration
+        $batch = $Bsk->Show("card_batches", "expiration_date, batch_name", "id='$bid'");
+        $exp_date = $batch ? $batch['expiration_date'] : '';
+        
+        $users = $Bsk->Select("userinfo a left join radcheck b on a.username = b.username and b.attribute = 'Cleartext-Password'", 
+            "a.username, b.value as password, a.serial_number, a.unit_price", 
+            "a.batch_id='$bid'");
+            
+        foreach($users as $u){
+            $sheet->setCellValue('A'.$row, $batch['batch_name']); // Series
+            $sheet->setCellValue('B'.$row, $u['serial_number']); // SN
+            $sheet->setCellValue('C'.$row, ''); // PIN
+            $sheet->setCellValue('D'.$row, $u['username']); // Username
+            $sheet->setCellValue('E'.$row, $u['password']); // Password
+            $sheet->setCellValue('F'.$row, $u['unit_price']); // Value
+            $sheet->setCellValue('G'.$row, $exp_date); // Expiration
+            $sheet->setCellValue('H'.$row, ''); // Used
+            $row++;
+        }
+    }
+    
+    // Stream file
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment;filename="vouchers_export.xlsx"');
+    header('Cache-Control: max-age=0');
+    
+    $writer = new Xlsx($spreadsheet);
+    $writer->save('php://output');
+    exit;
+}
+
+// IMPORT EXCEL
+if(isset($_FILES['import_file'])){
+    $file = $_FILES['import_file']['tmp_name'];
+    $profil = Rahmad($_POST['groupname']);
+    
+    if(!$file || !$profil){
+         echo json_encode(array("status" => false, "message" => "error", "data" => "File or Profile missing"));
+         exit;
+    }
+    
+    try {
+        $spreadsheet = IOFactory::load($file);
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray();
+        
+        // Skip Header
+        array_shift($rows);
+        
+        $count = 0;
+        $failed = 0;
+        
+        // Group by Series to create batches efficiently
+        $batches = [];
+        
+        foreach($rows as $r){
+            // Map Columns: A=Series, B=SN, D=Username, E=Password, F=Value, G=Expiration
+            $series = $r[0];
+            $sn = $r[1];
+            $user = $r[3];
+            $pass = $r[4];
+            $price = $r[5];
+            $exp = $r[6];
+            
+            if(!$series || !$user) continue;
+            
+            // Check/Create Batch
+            if(!isset($batches[$series])){
+                $chk = $Bsk->Show("card_batches", "id", "batch_name='$series'");
+                if($chk){
+                    $batches[$series] = $chk['id'];
+                } else {
+                    // Create new batch
+                    $batch_data = array(
+                        "batch_name" => $series,
+                        "profile" => $profil,
+                        "unit_price" => $price,
+                        "quantity" => 0,
+                        "created_by" => ($Menu['username'] ?? ($Users['username'] ?? 'admin')),
+                        "expiration_date" => $exp ? date('Y-m-d', strtotime($exp)) : date('Y-m-d', strtotime('+1 year'))
+                    );
+                    $Bsk->Insert("card_batches", $batch_data);
+                    $new_b = $Bsk->Show("card_batches", "id", "batch_name='$series'");
+                    $batches[$series] = $new_b['id'];
+                }
+            }
+            $bid = $batches[$series];
+            
+            // Add User
+            $post_array = array(
+                "identity"   => $identity_id,
+                "users"      => $user_id,
+                "username"   => $user,
+                "attribute"  => "Cleartext-Password",
+                "op"         => ":=",
+                "value"      => $pass,
+                "description"=> "Batch: $series (Imported)",
+                "created"    => date('Y-m-d H:i:s')
+            );
+            
+            $add = $Bsk->Insert("radcheck", $post_array);
+            if($add){
+                 $Bsk->Insert("radusergroup",
+                    array(
+                        "identity"  => $identity_id,
+                        "users"     => $user_id,
+                        "username"  => $user,
+                        "groupname" => $profil
+                    )
+                );
+                
+                $Bsk->Insert("userinfo", array(
+                    "username" => $user,
+                    "creationby" => $Menu['username'] ?? 'admin',
+                    "creationdate" => date('Y-m-d H:i:s'),
+                    "batch_id" => $bid,
+                    "serial_number" => $sn,
+                    "unit_price" => $price,
+                    "firstname" => "Batch $series",
+                    "lastname" => "Serial $sn"
+                ));
+                $count++;
+                
+                // Update batch qty
+                // This is inefficient inside loop but simple for now. 
+                // Better: Update after loop.
+            } else {
+                $failed++;
+            }
+        }
+        
+        // Update Quantities
+        foreach($batches as $s => $bid){
+            $cnt = $Bsk->Show("userinfo", "count(*) as c", "batch_id='$bid'");
+            $Bsk->Update("card_batches", array("quantity" => $cnt['c']), "id='$bid'");
+        }
+        
+        echo json_encode(array("status" => true, "message" => "success", "data" => "Imported $count cards ($failed failed)"));
+        
+    } catch(Exception $e){
+        echo json_encode(array("status" => false, "message" => "error", "data" => $e->getMessage()));
+    }
+    exit;
+}
+
+// PRINT BATCH
+if(isset($_GET['print'])){
+    // Support multiple batch IDs
+    $ids = isset($_GET['ids']) ? explode(',', $_GET['ids']) : (isset($_GET['print']) ? array($_GET['print']) : array());
+    $theme_id = $_GET['themes'] ?? '';
+    
+    // Fetch Theme (HTML) or Designer Template (JSON)
+    $query_theme = $Bsk->Show("themes a", "a.content", "a.identity = '$identity_id' and a.type = 'radius' " . ($theme_id ? "and a.id = '$theme_id'" : ""), "a.id asc");
+    $designer_tpl = null;
+    if(!$query_theme && $theme_id){
+        $designer_tpl = $Bsk->Show("voucher_templates", "*", "id = '$theme_id' and identity = '$identity_id' and status='true'");
+    }
+    
+    $data_print = array();
+    $number = 0;
+    
+    foreach($ids as $bid){
+        // Get Batch Info (Profile)
+        $batch_info = $Bsk->Show("card_batches", "profile", "id='$bid'");
+        $profile = $batch_info ? $batch_info['profile'] : '';
+        
+        // Get Data Limit (Quota)
+        $quota = '';
+        $profile_price = 0;
+        if($profile){
+             // Get Quota
+             $reply = $Bsk->Show("radgroupreply", "value", "groupname='$profile' and (attribute='ChilliSpot-Max-Total-Octets' OR attribute='Max-Total-Octets' OR attribute='Max-Octets')");
+             if($reply){
+                 $val = $reply['value'];
+                 if(is_numeric($val)){
+                     if($val >= 1073741824) $quota = round($val/1073741824, 0) . ' GB';
+                     elseif($val >= 1048576) $quota = round($val/1048576, 0) . ' MB';
+                     else $quota = round($val/1024, 0) . ' KB';
+                 } else {
+                     $quota = $val;
+                 }
+             }
+             
+             // Get Price from Profile (Fallback if batch price is 0)
+              // Try radprice first
+              $price_reply = $Bsk->Show("radprice", "price", "groupname='$profile'");
+              if($price_reply){
+                   $profile_price = $price_reply['price'];
+              } else {
+                   // Fallback
+                   $price_reply = $Bsk->Show("radgroupreply", "value", "groupname='$profile' and attribute='Unit-Price'");
+                   if($price_reply) $profile_price = $price_reply['value'];
+              }
+        }
+
+        // Get users
+        $users = $Bsk->Select("userinfo a left join radcheck b on a.username = b.username and b.attribute = 'Cleartext-Password'", 
+            "a.username, b.value as password, a.serial_number, a.unit_price as price, a.creationdate as created, a.username as qr_code", 
+            "a.batch_id='$bid'");
+            
+        foreach($users as $value_print){
+            $number++;
+            
+            // Resolve Price
+            $final_price = $value_print['price'];
+            if((!$final_price || $final_price == 0) && $profile_price > 0){
+                $final_price = $profile_price;
+            }
+            
+            if($query_theme){
+                // HTML theme path
+                $data_print[] = HTMLReplace($query_theme['content'],
+                    array_replace(
+                        $value_print, 
+                        array(
+                            "no"        => $number,
+                            "price"     => Money($final_price, $Config['currency']),
+                            "qr_code"   => '<div class="qr-code" data-code="'.$value_print['qr_code'].'"></div>',
+                            "profile"   => $profile,
+                            "data"      => $quota
+                        )
+                    )
+                );
+            } else if($designer_tpl){
+                $layout = json_decode($designer_tpl['layout'], true) ?: array();
+                $bg = trim($designer_tpl['background']);
+                if(!$bg){
+                    foreach($layout as $li){
+                        if(isset($li['type']) && $li['type'] === 'image' && !empty($li['isBg'])){
+                            $bg = isset($li['src']) ? $li['src'] : '';
+                            if($bg){ break; }
+                        }
+                    }
+                }
+                if($bg){
+                    if(substr($bg,0,5) !== 'data:' && substr($bg,0,4) !== 'http'){
+                        if(substr($bg,0,2) !== './') $bg = './'.$bg;
+                        if(strpos($bg,'?') === false) $bg = $bg.'?v='.time();
+                    }
+                    $bgStyle = 'background:url('.$bg.') no-repeat center/contain;';
+                } else {
+                    $bgStyle = '';
+                }
+                $html = '<div class="voucher-card" data-w="'.$designer_tpl['width'].'" data-h="'.$designer_tpl['height'].'" style="position:relative;width:'.$designer_tpl['width'].'px;height:'.$designer_tpl['height'].'px;'.$bgStyle.'">';
+                foreach($layout as $it){
+                    $text = $it['placeholder'];
+                    if($text == '[username]') $text = $value_print['username'];
+                    else if($text == '[password]') $text = $value_print['password'];
+                    else if($text == '[serial_number]') $text = $value_print['serial_number'];
+                    else if($text == '[profile]') $text = $profile;
+                    else if($text == '[price]') $text = Money($final_price, $Config['currency']);
+                    else if($text == '[data]') $text = $quota;
+                    else if($text == '[qr_code]') $text = '<div class="qr-code" data-code="'.$value_print['qr_code'].'"></div>';
+                    $style = 'position:absolute;left:'.intval($it['x']).'px;top:'.intval($it['y']).'px;color:'.$it['color'].';font:'.($it['bold']?'bold ':'').intval($it['size']).'px '.$it['family'].';';
+                    $html .= '<div style="'.$style.'">'.$text.'</div>';
+                }
+                $html .= '</div>';
+                $data_print[] = $html;
+            }
+        }
+    }
+    
+    echo json_encode($data_print ? 
+        array("status" => true, "message" => "success", "themes" => $query_theme, "print" => $data_print) : 
+        array("status" => false, "message" => "error", "data" => "Print data failed!"), true
+    );
+}
+
+?>
