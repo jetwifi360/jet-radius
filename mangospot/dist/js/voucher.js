@@ -483,7 +483,25 @@ function applyDesignerBackground(templateId){
 
 function buildGrid(items, cols) {
     cols = parseInt(cols) || 3;
-    var html = '<div class="print-sheet"><div class="sheet-grid" data-cols="' + cols + '">';
+    var pad = getNumberInput('page-padding', 8);
+    var gap = getNumberInput('grid-gap', 2);
+    // Convert mm to pixels (approx 96 DPI / 25.4)
+    var mmToPx = 3.78;
+    var pageWidth = 210 * mmToPx; // A4 width
+    var pageHeight = 297 * mmToPx; // A4 height
+    var contentWidth = pageWidth - (pad * 2 * mmToPx);
+    var contentHeight = pageHeight - (pad * 2 * mmToPx);
+    
+    // Estimate card height from first item (requires parsing or rendering hidden)
+    // For now, we assume standard card aspect ratio if not available, or use fitCards logic dynamically.
+    // Better approach: Let CSS Grid handle flow, but force breaks.
+    // However, CSS break-inside: avoid doesn't always work perfectly in Grid across browsers.
+    // The most robust way for "sharing on next page" is manually paginating.
+    
+    // Let's rely on CSS print breaking first, which is cleaner if configured right.
+    var html = '<div class="print-container">';
+    html += '<div class="sheet-grid" data-cols="' + cols + '">';
+    
     for (var i = 0; i < items.length; i++) {
         var cell = items[i];
         var baseHref = location.origin + location.pathname.replace(/[^\/]+$/, '');
@@ -511,7 +529,41 @@ function applyGridStyles(cols){
     cols = parseInt(cols) || 3;
     var pad = getNumberInput('page-padding', 8);
     var gap = getNumberInput('grid-gap', 2);
-    var style = '\n@page{size:A4;margin:0;}\nhtml,body{background:#fff !important;margin:0 !important;}\n.print-sheet{width:210mm;min-height:297mm;margin:0 auto;padding:' + pad + 'mm;box-sizing:border-box;background:#fff !important;}\n.sheet-grid{display:grid;grid-gap:' + gap + 'mm;grid-template-columns:repeat(' + cols + ',1fr);}\n.card-cell{width:100%;position:relative;overflow:hidden;border:0;background:transparent;padding:0;margin:0;}\n.card-cell .voucher-card{position:absolute;left:0;top:0;transform-origin:top left;}\n';
+    // Updated styles for correct paging
+    var style = `
+@page { size: A4; margin: 0; }
+html, body { background: #fff !important; margin: 0 !important; height: 100%; }
+.print-container {
+    width: 210mm;
+    margin: 0 auto;
+    background: #fff !important;
+}
+.sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(${cols}, 1fr);
+    grid-gap: ${gap}mm;
+    padding: ${pad}mm;
+    box-sizing: border-box;
+}
+.card-cell {
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+}
+.card-cell .voucher-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: top left;
+}
+`;
     var tag = document.getElementById('print-grid-styles');
     if(!tag){
         tag = document.createElement('style');
