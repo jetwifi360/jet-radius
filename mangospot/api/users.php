@@ -23,6 +23,38 @@ function connect_mikrotik_user($u, $Bsk, $Router, $Auth) {
 }
 
 // Handle Actions
+if(isset($_POST['delete'])){
+    $id = Rahmad($_POST['delete']);
+    // 1. Get username from ID (since JS sends ID)
+    $info = $Bsk->Show("radcheck", "username", "id='$id'");
+    
+    if($info){
+        $u = $info['username'];
+        
+        // 2. Disconnect User (Reuse existing logic)
+        if(connect_mikrotik_user($u, $Bsk, $Router, $Auth)){
+             $uid = $Router->comm("/ip/hotspot/active/print", array("?user" => $u));
+             foreach($uid as $user_active) { $Router->comm("/ip/hotspot/active/remove", array(".id" => $user_active['.id'])); }
+             $ppp_id = $Router->comm("/ppp/active/print", array("?name" => $u));
+             foreach($ppp_id as $ppp_active) { $Router->comm("/ppp/active/remove", array(".id" => $ppp_active['.id'])); }
+             $Router->disconnect();
+        }
+
+        // 3. Delete from Radcheck and other tables
+        $Bsk->Delete("radacct", array("username" => $u));
+        $Bsk->Delete("radcheck", array("username" => $u));
+        $Bsk->Delete("radreply", array("username" => $u));
+        $Bsk->Delete("radusergroup", array("username" => $u));
+        $Bsk->Delete("custom_usage", array("username" => $u));
+        $Bsk->Delete("daily_usage", array("username" => $u));
+
+        echo json_encode(array("status"=>true, "message"=>"User deleted"));
+    } else {
+        echo json_encode(array("status"=>false, "message"=>"User not found"));
+    }
+    exit;
+}
+
 if(isset($_POST['action'])){
     $action = Rahmad($_POST['action']);
     $u = Rahmad($_POST['username']);
