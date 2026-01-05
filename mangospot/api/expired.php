@@ -14,7 +14,8 @@ if(isset($_GET['data'])){
         "radcheck a LEFT JOIN radusergroup b ON a.username = b.username", 
         "b.groupname as profile, a.username, a.created as time, '' as usages, 'Expired' as expired, '0' as price, '0' as discount, '0' as total", 
         // FIX: Use {$Menu['identity']} for correct string interpolation
-        "a.identity = '{$Menu['identity']}' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < NOW() ".$chang, 
+        // FIX 2: Ensure DATE comparison handles empty or invalid dates gracefully, and matches format
+        "a.identity = '{$Menu['identity']}' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < CURDATE() ".$chang, 
         array("a.username", "b.groupname", "a.created")
     );
     echo json_encode($query, true);
