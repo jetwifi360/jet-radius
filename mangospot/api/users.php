@@ -146,10 +146,25 @@ if(isset($_GET['data'])){
         array("a.username")
     );
 
+    // Filter logic for pwdless query
+    $pwdless_where = "b.identity = '$Menu[identity]' and a.username IS NULL";
+    
+    // 1. Apply Profile Filter
+    if(!empty($_GET['data'])) {
+        $pwdless_where .= " and b.groupname = '".Rahmad($_GET['data'])."' ";
+    }
+    
+    // 2. Apply Search Filter
+    if(!empty($_REQUEST['search']['value'])) {
+        $st = strtolower($_REQUEST['search']['value']);
+        // Use strict prefix match to be consistent with connect.php
+        $pwdless_where .= " and lower(b.username) LIKE '$st%' ";
+    }
+
     $pwdless = $Bsk->Select(
         "radusergroup b left join radcheck a on a.username = b.username and a.attribute = 'Cleartext-Password' left join userinfo u on u.username = b.username",
         "b.username, b.groupname as profiles, u.creationdate as created",
-        "b.identity = '$Menu[identity]' and a.username IS NULL"
+        $pwdless_where
     );
     if($pwdless){
         if(!isset($radcheck['data']) || !is_array($radcheck['data'])) $radcheck['data'] = array();
