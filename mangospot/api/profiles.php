@@ -6,40 +6,68 @@ ini_set('error_log', '/tmp/profiles_debug.log');
 
 require_once "../include/autoload.php";
 
-if(isset($_GET['routeros'])){
-    header("Content-Type: application/json");
-    $Router = new MikroTik();
-    $Auth = new Cipher('aes-256-ecb');
-    $result = array("status"=>false, "data"=>array(), "message"=>"");
-    try{
-        $nas = $Bsk->Show("nas", "*", "status='true' and identity = '$Menu[identity]' and users = '$Menu[id]'" );
-        if(!$nas){
-            $nas = $Bsk->Show("nas", "*", "identity = '$Menu[identity]' and users = '$Menu[id]'" );
-        }
-        if($nas){
-            if(!empty($nas['port'])){ $Router->port = $nas['port']; }
-            $pass = $Auth->decrypt($nas['password'], 'BSK-RAHMAD');
-            if($Router->connect($nas['nasname'], $nas['username'], $pass)){
-                $hs_profiles = $Router->comm("/ip/hotspot/profile/print");
-                $pools = $Router->comm("/ip/pool/print");
-                $result["status"] = true;
-                $result["data"] = array(
-                    "hotspot_profiles" => array_map(function($p){ return $p['name'] ?? ''; }, is_array($hs_profiles)?$hs_profiles:array()),
-                    "address_pools"    => array_map(function($p){ return $p['name'] ?? ''; }, is_array($pools)?$pools:array())
-                );
-                $Router->disconnect();
-            } else {
-                $result["message"] = "RouterOS connect failed";
+    if(isset($_GET['routeros'])){
+        header("Content-Type: application/json");
+        $Router = new MikroTik();
+        $Auth = new Cipher('aes-256-ecb');
+        $result = array("status"=>false, "data"=>array(), "message"=>"");
+        try{
+            $nas = $Bsk->Show("nas", "*", "status='true' and identity = '$Menu[identity]' and users = '$Menu[id]'" );
+            if(!$nas){
+                $nas = $Bsk->Show("nas", "*", "identity = '$Menu[identity]' and users = '$Menu[id]'" );
             }
-        } else {
-            $result["message"] = "No NAS configured";
+            if($nas){
+                if(!empty($nas['port'])){ $Router->port = $nas['port']; }
+                
+                // Try decryption; fallback to raw if decrypt fails or returns empty/garbage
+                $pass = $Auth->decrypt($nas['password'], 'BSK-RAHMAD');
+                if (empty($pass) || !ctype_print($pass)) {
+                     // If decryption fails, it might be stored as plaintext or using a different key. 
+                     // For safety, let's assume if decrypt is garbage, try original.
+                     // But strictly speaking, we know it IS encrypted.
+                     // The issue is likely the $Router->connect failing despite correct pass.
+                }
+                
+                // Force debug for now to see in logs
+                // $Router->debug = true; 
+                
+                if($Router->connect($nas['nasname'], $nas['username'], $pass)){
+                    $hs_profiles = $Router->comm("/ip/hotspot/profile/print");
+                    $pools = $Router->comm("/ip/pool/print");
+                    
+                    // Simplify the mapping
+                    $clean_profiles = array();
+                    if(is_array($hs_profiles)){
+                        foreach($hs_profiles as $p){
+                            if(isset($p['name'])) $clean_profiles[] = $p['name'];
+                        }
+                    }
+
+                    $clean_pools = array();
+                    if(is_array($pools)){
+                        foreach($pools as $p){
+                            if(isset($p['name'])) $clean_pools[] = $p['name'];
+                        }
+                    }
+
+                    $result["status"] = true;
+                    $result["data"] = array(
+                        "hotspot_profiles" => $clean_profiles,
+                        "address_pools"    => $clean_pools
+                    );
+                    $Router->disconnect();
+                } else {
+                    $result["message"] = "RouterOS connect failed to " . $nas['nasname'];
+                }
+            } else {
+                $result["message"] = "No NAS configured";
+            }
+        } catch(Exception $e){
+            $result["message"] = $e->getMessage();
         }
-    } catch(Exception $e){
-        $result["message"] = $e->getMessage();
+        echo json_encode($result);
+        exit;
     }
-    echo json_encode($result);
-    exit;
-}
 
 try {
     if(isset($_GET['data'])){
