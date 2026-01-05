@@ -143,7 +143,7 @@ if(isset($_GET['data'])){
         "radcheck a left join radusergroup b on a.username = b.username", 
         "a.id, a.username, b.groupname as profiles, a.description, a.created", 
         "a.identity = '$Menu[identity]' and a.attribute = 'Cleartext-Password' ".$getGroup, 
-        array("a.id", "a.username", "b.groupname", "a.description", "a.created", "a.id")
+        array("a.username")
     );
 
     $pwdless = $Bsk->Select(
