@@ -229,6 +229,13 @@ var brunette = function () {
 		return false;
 	});
 
+    // Custom Color Init
+    if ($('.hk-navbar').hasClass('navbar-light')) {
+        $('.hk-navbar .navbar-nav .nav-item .nav-link').css('color', '#324148');
+    }
+    // Make Sidebar links darker/more visible by default
+    $('.hk-wrapper.hk-vertical-nav .hk-nav.hk-nav-light .navbar-nav .nav-item .nav-link').css('color', '#2d3436');
+
 };
 /***** brunette function end *****/
 
