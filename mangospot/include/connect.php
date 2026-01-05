@@ -129,7 +129,8 @@ class Connect extends PDO{
 				if($this->sql == 'pgsql'){
 					$search[] ="lower($colums::text) LIKE '%".strtolower($requestData['search']['value'])."%' ";
 				} else {
-					$search[] ="lower($colums) LIKE '%".strtolower($requestData['search']['value'])."%' ";
+					// Use CAST to ensure non-string columns (like ID) can be searched with LIKE
+					$search[] ="lower(CAST($colums AS CHAR)) LIKE '%".strtolower($requestData['search']['value'])."%' ";
 				}
 			}
 			$sql.= " AND (".implode(' OR ', $search).")";
