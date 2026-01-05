@@ -129,8 +129,8 @@ class Connect extends PDO{
 				if($this->sql == 'pgsql'){
 					$search[] ="lower($colums::text) LIKE '%".strtolower($requestData['search']['value'])."%' ";
 				} else {
-					// Use CAST to ensure non-string columns (like ID) can be searched with LIKE
-					$search[] ="lower(CAST($colums AS CHAR)) LIKE '%".strtolower($requestData['search']['value'])."%' ";
+					// Prefix match: Only match from the beginning of the string (e.g. 'CA4%' not '%CA4%')
+					$search[] ="lower(CAST($colums AS CHAR)) LIKE '".strtolower($requestData['search']['value'])."%' ";
 				}
 			}
 			$sql.= " AND (".implode(' OR ', $search).")";
