@@ -157,14 +157,14 @@ if(isset($_POST['autoremove']) || isset($_GET['autoremove'])){
         $input_sql[] = $value_sql;
     }
     $Bsk->Insert("income", array_merge($autoRecap, array("data" => json_encode($input_sql, true))));
-    $autoRemove = $Bsk->Select("expired", "username", "identity = '$autoRecap[identity]' and users = '$autoRecap[users]'");
-    foreach ($autoRemove as $deleteKey) {
-        $Bsk->Delete("radacct",     array("username" => $deleteKey['username']));
-        $Bsk->Delete("radpostauth", array("username" => $deleteKey['username']));
-        $Bsk->Delete("radcheck",    array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
-        $Bsk->Delete("radreply",    array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
-        $Bsk->Delete("radusergroup",array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
-    }
+    // $autoRemove = $Bsk->Select("expired", "username", "identity = '$autoRecap[identity]' and users = '$autoRecap[users]'");
+    // foreach ($autoRemove as $deleteKey) {
+    //     $Bsk->Delete("radacct",     array("username" => $deleteKey['username']));
+    //     $Bsk->Delete("radpostauth", array("username" => $deleteKey['username']));
+    //     $Bsk->Delete("radcheck",    array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
+    //     $Bsk->Delete("radreply",    array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
+    //     $Bsk->Delete("radusergroup",array("username" => $deleteKey['username'], "identity" => $autoRecap['identity'], "users" => $autoRecap['users']));
+    // }
     unset($autoRecap['users']);
     unset($autoRecap['identity']);
     echo json_encode($autoRecap ? 

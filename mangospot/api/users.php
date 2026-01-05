@@ -224,7 +224,8 @@ if(isset($_GET['data'])){
             }
 
             // Expiration
-            $row['expiration'] = isset($exp_data[$user]) ? $exp_data[$user] : $row['created'];
+            // Fix: Don't fallback to created date. If Expiration is missing, it's unlimited.
+            $row['expiration'] = isset($exp_data[$user]) ? $exp_data[$user] : '';
 
             // Daily Traffic
             $d_bytes = isset($daily_usage[$user]) ? $daily_usage[$user] : 0;
@@ -270,6 +271,8 @@ if(isset($_GET['data'])){
                         $remaining_str = '<span class="badge badge-danger">Expired</span>';
                     }
                 }
+            } else {
+                 $remaining_str = '<span class="badge badge-success">Unlimited</span>';
             }
             $row['remaining'] = $remaining_str;
         }
@@ -595,6 +598,18 @@ if(isset($_POST['qty'])){
                 "groupname" => Rahmad($_POST['groupname'])
             )
         );
+        if(isset($_POST['expiration']) && !empty($_POST['expiration'])){
+             $Bsk->Insert("radcheck", array(
+                "identity"   => $Menu['identity'],
+                "users"      => $Menu['id'],
+                "username"   => $batch_user,
+                "attribute"  => "Expiration", 
+                "op"         => ":=",
+                "value"      => $_POST['expiration'], // Format: YYYY-MM-DD HH:MM:SS or similar
+                "description"=> $_POST['description'],
+                "created"    => $_POST['created']
+            ));
+        }
         if($nas_ip){
             $Bsk->Delete("radcheck", array("username"=>$batch_user, "attribute"=>"NAS-IP-Address"));
             $Bsk->Insert("radcheck", array(
