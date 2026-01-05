@@ -154,6 +154,28 @@ try {
                 } elseif ($attribute == 'Max-Data') {
                     // ByteConvert expects string
                     $value_db = ByteConvert($raw_value);
+                } elseif ($attribute == 'Max-All-Session' || $attribute == 'Access-Period') {
+                     // DateTime expects string
+                     $value_db = DateTime($raw_value);
+                     
+                     // SYNC LOGIC: Also set Session-Timeout in radgroupreply
+                     // MikroTik needs Session-Timeout in the Access-Accept packet to know when to kick the user.
+                     $query_session_timeout = array(
+                        "identity"   => $Menu['identity'],
+                        "users"      => $Menu['id'],
+                        "groupname"  => $groupname,
+                        "attribute"  => 'Session-Timeout',
+                        "op"         => ":=",
+                        "value"      => $value_db,
+                        "description"=> $description
+                    );
+                    $check_st = $Bsk->Show("radgroupreply", "groupname", "groupname = '$post_profile' and attribute = 'Session-Timeout' and identity = '$Menu[identity]'");
+                    if($check_st){
+                        $Bsk->Update("radgroupreply", $query_session_timeout, "groupname = '$check_st[groupname]' and attribute = 'Session-Timeout' and identity = '$Menu[identity]'");
+                    } else {
+                        $Bsk->Insert("radgroupreply", $query_session_timeout);
+                    }
+
                 } else {
                     // DateTime expects string
                     $value_db = DateTime($raw_value);
