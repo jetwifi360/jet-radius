@@ -1,24 +1,136 @@
 <?php
 $radius = ($Menu['data'] ? " inner join packet c on a.groupname = c.groupname " : "and a.users = '$Menu[id]'");
 if(isset($_GET['data'])){
-    $table = array();
-    // Use addslashes to prevent SQL syntax errors from quotes in the input
+    // 1. Fetch ALL candidate users (Cleartext-Password)
+    // We need to fetch them all to filter by expiration logic in PHP
     $chang = (empty($_GET['data']) ? "" : " and b.groupname = '".addslashes(Rahmad($_GET['data']))."'");
-    $users = (empty($_GET['users']) ? $Menu['id'] : Rahmad($_GET['users']));
     
-    // Debug: Check if 'expired' view is working or if we need to query raw tables
-    // The 'expired' view might be empty if the underlying conditions (time/quota) aren't met in the exact way the view expects.
-    // However, we can try to manually select users who have Expiration < NOW()
+    // Filter by specific reseller (users column)
+    $getUsers = (empty($_GET['users']) ? $Menu['id'] : Rahmad($_GET['users']));
+    $user_filter = " AND a.users = '$getUsers' ";
     
-    $query = $Bsk->Table(
-        "radcheck a LEFT JOIN radusergroup b ON a.username = b.username", 
-        "b.groupname as profile, a.username, a.created as time, '' as usages, 'Expired' as expired, '0' as price, '0' as discount, '0' as total", 
-        // FIX: Use {$Menu['identity']} for correct string interpolation
-        // FIX 2: Ensure DATE comparison handles empty or invalid dates gracefully, and matches format
-        "a.identity = '{$Menu['identity']}' AND a.attribute = 'Expiration' AND STR_TO_DATE(a.value, '%Y-%m-%d') < CURDATE() ".$chang, 
-        array("a.username", "b.groupname", "a.created")
+    $users_where = "a.identity = '{$Menu['identity']}' AND a.attribute = 'Cleartext-Password' " . $user_filter . $chang;
+    
+    if(!empty($_REQUEST['search']['value'])) {
+        $st = strtolower($_REQUEST['search']['value']);
+        // Use strict prefix match to be consistent with users.php
+        $users_where .= " AND lower(a.username) LIKE '$st%' ";
+    }
+    
+    // Fetch all users matching the search/profile criteria
+    $query_users = $Bsk->Select(
+        "radcheck a left join radusergroup b on a.username = b.username", 
+        "a.username, b.groupname as profile, a.created", 
+        $users_where
     );
-    echo json_encode($query, true);
+    
+    $all_users = array();
+    if($query_users){
+        foreach($query_users as $u){
+            $all_users[] = $u;
+        }
+    }
+    
+    // 2. Prepare for Bulk Attribute Fetching
+    $usernames = array_column($all_users, 'username');
+    $usage_data = array();
+    $exp_data = array();
+    $group_limits = array();
+    
+    if (!empty($usernames)) {
+        // Chunking to avoid SQL limits if too many users
+        $chunks = array_chunk($usernames, 500);
+        
+        foreach($chunks as $chunk){
+             $safe_usernames = array_map(function($u) { return str_replace("'", "''", $u); }, $chunk);
+             $user_list = "'" . implode("','", $safe_usernames) . "'";
+             
+             // Usage
+             $res_usage = $Bsk->Select("custom_usage", "username, total_bytes, total_time", "username IN ($user_list)");
+             if($res_usage) {
+                 foreach($res_usage as $u) { $usage_data[$u['username']] = $u; }
+             }
+             
+             // Expiration Date
+             $res_exp = $Bsk->Select("radcheck", "username, value", "attribute='Expiration' AND username IN ($user_list)");
+             if($res_exp) {
+                 foreach($res_exp as $e) { $exp_data[$e['username']] = $e['value']; }
+             }
+        }
+        
+        // Group Limits (Fetch all relevant groups)
+        $profiles = array_unique(array_column($all_users, 'profile'));
+        $safe_profiles = array_map(function($p) { return str_replace("'", "''", $p); }, $profiles);
+        if(!empty($safe_profiles)){
+            $prof_list = "'" . implode("','", $safe_profiles) . "'";
+            $res_limits = $Bsk->Select("radgroupcheck", "groupname, value", "attribute='Max-All-Session' AND groupname IN ($prof_list)");
+            if($res_limits){
+                foreach($res_limits as $l){ $group_limits[$l['groupname']] = $l['value']; }
+            }
+        }
+    }
+    
+    // 3. Filter Expired Users
+    $expired_list = array();
+    foreach($all_users as $row){
+        $user = $row['username'];
+        $is_expired = false;
+        $reason = "Expired";
+        
+        // Logic from users.php
+        $limit_time = isset($group_limits[$row['profile']]) ? intval($group_limits[$row['profile']]) : 0;
+        
+        if ($limit_time > 0) {
+            $used_time = isset($usage_data[$user]) ? intval($usage_data[$user]['total_time']) : 0;
+            $rem_seconds = $limit_time - $used_time;
+            
+            if ($rem_seconds <= 0) {
+                $is_expired = true;
+                $reason = "Time Limit Reached";
+            }
+        } elseif (isset($exp_data[$user])) {
+            // Check Date Expiration
+            $exp_ts = strtotime($exp_data[$user]);
+            if ($exp_ts) {
+                if ($exp_ts <= time()) {
+                     $is_expired = true;
+                     $reason = "Date Expired";
+                }
+            }
+        }
+        
+        if($is_expired){
+            $expired_list[] = array(
+                "profile" => $row['profile'],
+                "username" => $row['username'],
+                "time" => $row['created'],
+                "usages" => $reason, 
+                "expired" => "Expired",
+                "price" => 0,
+                "discount" => 0,
+                "total" => 0,
+                // Helper for frontend (checkbox value)
+                "id" => $row['username'] 
+            );
+        }
+    }
+    
+    // 4. Pagination
+    $total = count($expired_list);
+    $start = isset($_REQUEST['start']) ? intval($_REQUEST['start']) : 0;
+    $length = isset($_REQUEST['length']) ? intval($_REQUEST['length']) : 10;
+    
+    // Handle "All" (-1)
+    if($length == -1) $length = $total;
+    
+    $data = array_slice($expired_list, $start, $length);
+    
+    echo json_encode(array(
+        "draw" => intval($_REQUEST['draw'] ?? 0),
+        "recordsTotal" => $total,
+        "recordsFiltered" => $total,
+        "data" => $data
+    ));
 }
 if(isset($_GET['profile'])){
     $array_profile = array();
@@ -98,3 +210,4 @@ if(isset($_POST['delete'])){
 		array("status" => false, "message" => "error", "data" => "Delete data failed!"), true
     );
 }
+?>

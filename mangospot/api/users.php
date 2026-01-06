@@ -258,6 +258,7 @@ if(isset($_GET['data'])){
     // Inject missing fields with real data
     if ($radcheck['data']) {
         $usernames = array_column($radcheck['data'], 'username');
+        // Fix: Properly escape single quotes for SQL IN clause
         $safe_usernames = array_map(function($u) { return str_replace("'", "''", $u); }, $usernames);
         $user_list = "'" . implode("','", $safe_usernames) . "'";
         
